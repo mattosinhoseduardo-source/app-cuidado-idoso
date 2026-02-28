@@ -26,155 +26,159 @@ if not firebase_admin._apps:
         st.error(f"Erro de conexão: {e}")
 
 # --- ESTADO DA SESSÃO ---
-if 'page' not in st.session_state:
-    st.session_state.page = "login"
-if 'user_email' not in st.session_state:
-    st.session_state.user_email = ""
+if 'page' not in st.session_state: st.session_state.page = "login"
+if 'user_email' not in st.session_state: st.session_state.user_email = ""
+if 'form_reset' not in st.session_state: st.session_state.form_reset = 0
 
 def mudar_pagina(nome):
     st.session_state.page = nome
     st.rerun()
 
-# --- 1ª TELA: LOGIN ---
+def limpar_formulario():
+    st.session_state.form_reset += 1
+
+# --- LISTA DE ESPECIALIDADES ---
+LISTA_ESP = ["Alergista", "Anestesiologia", "Angiologia", "Cardiologia", "Cirurgião", "Clínico Geral", "Coloproctologia", "Dermatologia", "Endocrinologia", "Gastroenterologia", "Geriatria", "Ginecologia e obstetrícia", "Hematologia e hemoterapia", "Infectologia", "Mastologia", "Nefrologia", "Neurocirurgia", "Neurologia", "Nutrologia", "Oftalmologia", "Ortopedia e traumatologia", "Otorrinolaringologia", "Pneumologia", "Psiquiatria", "Reumatologia", "Urologia"]
+
+# --- LOGIN ---
 if st.session_state.page == "login":
     st.title("🏥 Gestão de Cuidados")
     email = st.text_input("E-mail").lower().strip()
     senha = st.text_input("Senha", type="password")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("OK", use_container_width=True):
-            # Admin Master
-            if email == "admin@teste.com" and senha == "123":
+    if st.button("OK", use_container_width=True):
+        if email == "admin@teste.com" and senha == "123":
+            st.session_state.user_email = email
+            mudar_pagina("dashboard")
+        else:
+            usuarios = db.reference('usuarios_aprovados').get()
+            if usuarios and any(v['email'].lower() == email and v['senha'] == senha for v in usuarios.values()):
                 st.session_state.user_email = email
                 mudar_pagina("dashboard")
             else:
-                # Verifica no Firebase se o usuário existe e está aprovado
-                usuarios = db.reference('usuarios_aprovados').get()
-                sucesso = False
-                if usuarios:
-                    for k, v in usuarios.items():
-                        if v['email'].lower() == email and v['senha'] == senha:
-                            st.session_state.user_email = email
-                            sucesso = True
-                            mudar_pagina("dashboard")
-                
-                if not sucesso:
-                    st.error("Acesso negado: Usuário incorreto ou ainda Pendente de aprovação.")
-    
-    with col2:
-        st.button("CANCELAR", use_container_width=True)
-
-    st.divider()
+                st.error("Acesso negado.")
     if st.button("Cadastrar Novo Usuário"): mudar_pagina("cadastro")
 
-# --- TELA DE CADASTRO ---
-elif st.session_state.page == "cadastro":
-    st.title("📝 Cadastro de Usuário")
-    nome = st.text_input("Nome Completo")
-    email_cad = st.text_input("E-mail").lower().strip()
-    tel = st.text_input("Telefone (com DDD)")
-    senha_cad = st.text_input("Senha", type="password")
-
-    if st.button("Confirmar Cadastro"):
-        if nome and email_cad and senha_cad:
-            db.reference('usuarios_pendentes').push({
-                'nome': nome, 'email': email_cad, 'telefone': tel, 'senha': senha_cad, 'status': 'pendente'
-            })
-            st.success("Cadastro enviado! Solicite ao Administrador a liberação do seu acesso.")
-            if st.button("Voltar ao Login"): mudar_pagina("login")
-        else:
-            st.warning("Preencha todos os campos.")
-    
-    if st.button("Voltar"): mudar_pagina("login")
-
-# --- 2ª TELA: DASHBOARD ---
+# --- DASHBOARD ---
 elif st.session_state.page == "dashboard":
     st.title("Página Inicial")
-    
-    # PAINEL DO ADMINISTRADOR
     if st.session_state.user_email == "admin@teste.com":
         with st.expander("🔔 GESTÃO DE ACESSOS (ADMIN)"):
             pendentes = db.reference('usuarios_pendentes').get()
             if pendentes:
-                for key, val in pendentes.items():
-                    st.write(f"**{val['nome']}** ({val['email']})")
-                    if st.button(f"Aprovar {val['nome']}", key=key):
-                        db.reference('usuarios_aprovados').child(key).set(val)
-                        db.reference('usuarios_pendentes').child(key).delete()
-                        st.success(f"Acesso liberado para {val['nome']}!")
+                for k, v in pendentes.items():
+                    if st.button(f"Aprovar {v['nome']}", key=k):
+                        db.reference('usuarios_aprovados').child(k).set(v)
+                        db.reference('usuarios_pendentes').child(k).delete()
                         st.rerun()
-            else:
-                st.write("Nenhum usuário aguardando aprovação.")
-
-    col1, col2 = st.columns(2)
-    with col1:
+    c1, c2 = st.columns(2)
+    with c1:
         if st.button("💊 MEDICAMENTOS", use_container_width=True): mudar_pagina("meds")
         if st.button("📅 CONSULTAS", use_container_width=True): mudar_pagina("consultas")
-    with col2:
+    with c2:
         if st.button("🧪 EXAMES", use_container_width=True): mudar_pagina("exames")
         if st.button("📊 RELATÓRIOS", use_container_width=True): mudar_pagina("relatorios")
-    
-    st.divider()
-    if st.button("Sair"): 
-        st.session_state.user_email = ""
-        mudar_pagina("login")
+    if st.button("Sair"): mudar_pagina("login")
 
-# --- MÓDULO: MEDICAMENTOS (Mantido) ---
-elif st.session_state.page == "meds":
-    st.title("💊 Medicamentos")
-    with st.form("cad_med"):
-        n_med = st.text_input("Nome do Medicamento")
-        mg = st.text_input("Miligramas")
-        t_opcoes = ["MANHÃ", "MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "TARDE", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "NOITE"]
-        turno = st.selectbox("Turno / Forma de Uso", t_opcoes)
-        if st.form_submit_button("CADASTRAR"):
-            db.reference('medicamentos').push({'nome': n_med, 'mg': mg, 'turno': turno, 'data': str(datetime.date.today())})
-            st.success("Salvo!")
-    
-    lista = db.reference('medicamentos').get()
-    if lista:
-        for k, v in lista.items():
-            c1, c2 = st.columns([4, 1])
-            c1.write(f"{v['nome']} ({v['mg']}) - {v['turno']}")
-            if c2.button("🗑️", key=k):
-                db.reference('medicamentos').child(k).delete()
-                st.rerun()
-    if st.button("VOLTAR"): mudar_pagina("dashboard")
-
-# --- MÓDULO: CONSULTAS (Novo) ---
+# --- MÓDULO CONSULTAS ---
 elif st.session_state.page == "consultas":
     st.title("📅 Agendamento de Consultas")
     
-    with st.form("cad_consulta"):
-        especialidades = ["Alergista", "Anestesiologia", "Angiologia", "Cardiologia", "Cirurgião", "Clínico Geral", "Coloproctologia", "Dermatologia", "Endocrinologia", "Gastroenterologia", "Geriatria", "Ginecologia e obstetrícia", "Hematologia e hemoterapia", "Infectologia", "Mastologia", "Nefrologia", "Neurocirurgia", "Neurologia", "Nutrologia", "Oftalmologia", "Ortopedia e traumatologia", "Otorrinolaringologia", "Pneumologia", "Psiquiatria", "Reumatologia", "Urologia"]
-        esp = st.selectbox("Especialidade", especialidades)
-        data_c = st.date_input("Data da Consulta", format="DD/MM/YYYY")
-        hora_c = st.time_input("Hora da Consulta")
-        medico = st.text_input("Médico")
-        local = st.text_input("Clínica / Hospital")
-        end = st.text_input("Endereço")
-        obs = st.text_area("Observações")
-        
-        if st.form_submit_button("OK"):
-            db.reference('consultas').push({
-                'especialidade': esp, 'data': str(data_c), 'hora': str(hora_c),
-                'medico': medico, 'local': local, 'endereco': end, 'obs': obs
-            })
-            st.success("Consulta cadastrada com sucesso!")
+    # Botões no topo
+    col_btn1, col_btn2 = st.columns([1, 1])
+    btn_voltar = col_btn2.button("VOLTAR", use_container_width=True)
+    if btn_voltar: mudar_pagina("dashboard")
 
-    st.divider()
-    st.subheader("Consultas Agendadas")
-    cons = db.reference('consultas').get()
-    if cons:
-        # Ordenar por data (opcional)
-        for k, v in cons.items():
-            with st.container():
-                st.write(f"**{v['data']} às {v['hora']}** - {v['especialidade']}")
-                st.write(f"Dr(a). {v['medico']} | Local: {v['local']}")
-                if st.button("Excluir", key=f"del_{k}"):
+    # Layout dividido: Lista Esquerda, Cadastro Direita
+    col_lista, col_cad = st.columns([1, 1.5])
+
+    with col_cad:
+        with st.form(key=f"form_con_{st.session_state.form_reset}"):
+            # Botão Cadastrar dentro do formulário para o topo
+            submit = st.form_submit_button("CADASTRAR", use_container_width=True)
+            esp = st.selectbox("Especialidade", LISTA_ESP)
+            data_c = st.date_input("Data da Consulta", format="DD/MM/YYYY")
+            hora_c = st.text_input("Hora da Consulta (ex: 14:30)")
+            medico = st.text_input("Nome do Médico")
+            local = st.text_input("Clínica / Hospital")
+            
+            if submit:
+                db.reference('consultas').push({
+                    'especialidade': esp, 'data': str(data_c), 'hora': hora_c,
+                    'medico': medico, 'local': local, 'timestamp': datetime.datetime.now().timestamp()
+                })
+                st.success("Confirmação de cadastro realizada!")
+                limpar_formulario()
+                st.rerun()
+
+    with col_lista:
+        st.subheader("Histórico")
+        cons = db.reference('consultas').order_by_child('timestamp').get()
+        if cons:
+            for k, v in reversed(list(cons.items())):
+                d_fmt = datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y')
+                st.info(f"📅 {d_fmt} - {v['hora']}\n\n**{v['especialidade']}**\n\nDr(a). {v['medico']}")
+                if st.button("🗑️", key=f"del_{k}"):
                     db.reference('consultas').child(k).delete()
                     st.rerun()
-                st.divider()
+
+# --- MÓDULO MEDICAMENTOS ---
+elif st.session_state.page == "meds":
+    st.title("💊 Medicamentos")
     
+    col_btn1, col_btn2 = st.columns([1, 1])
+    if col_btn2.button("VOLTAR", use_container_width=True): mudar_pagina("dashboard")
+
+    col_lista_m, col_cad_m = st.columns([1, 1.5])
+
+    with col_cad_m:
+        with st.form(key=f"form_med_{st.session_state.form_reset}"):
+            submit_m = st.form_submit_button("CADASTRAR", use_container_width=True)
+            nome_m = st.text_input("Nome do Medicamento")
+            mg = st.text_input("Dosagem (mg)")
+            
+            c_data1, c_data2 = st.columns(2)
+            data_cad = c_data1.date_input("Data do Cadastro", format="DD/MM/YYYY")
+            hoje = c_data2.checkbox("Data de Hoje", value=True)
+            
+            medico_m = st.text_input("Médico")
+            esp_m = st.selectbox("Especialidade", LISTA_ESP)
+            
+            turnos = ["MANHÃ", "MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "TARDE", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "NOITE"]
+            turno_sel = st.selectbox("Forma de Uso", turnos)
+            
+            # Lembretes
+            lembrete = st.checkbox("Necessário Lembrete?")
+            dados_lembrete = {}
+            if lembrete:
+                tipo_l = st.radio("Tipo", ["Recorrente", "Personalizado"], horizontal=True)
+                if tipo_l == "Recorrente":
+                    dados_lembrete['horario'] = str(st.time_input("Horário do Despertador"))
+                else:
+                    dados_lembrete['datas'] = st.text_area("Datas e Horas (ex: 01/03 08:00, 02/03 08:00)")
+            
+            if submit_m:
+                db.reference('medicamentos').push({
+                    'nome': nome_m, 'mg': mg, 'medico': medico_m, 'especialidade': esp_m,
+                    'turno': turno_sel, 'data_cadastro': str(data_cad), 'timestamp': datetime.datetime.now().timestamp()
+                })
+                st.success("Confirmação de cadastro realizada!")
+                limpar_formulario()
+                st.rerun()
+
+    with col_lista_m:
+        st.subheader("Cadastrados")
+        meds = db.reference('medicamentos').order_by_child('turno').get()
+        if meds:
+            # Ordenação manual por turno conforme pedido
+            ordem_turnos = {t: i for i, t in enumerate(turnos)}
+            meds_sorted = sorted(meds.items(), key=lambda x: ordem_turnos.get(x[1].get('turno', ''), 99))
+            for k, v in meds_sorted:
+                st.warning(f"💊 **{v['turno']}**\n\n{v['nome']} ({v['mg']})")
+                if st.button("🗑️", key=f"del_m_{k}"):
+                    db.reference('medicamentos').child(k).delete()
+                    st.rerun()
+
+# Outras telas (Placeholder)
+elif st.session_state.page in ["cadastro", "exames", "relatorios"]:
+    st.title(st.session_state.page.upper())
     if st.button("VOLTAR"): mudar_pagina("dashboard")
