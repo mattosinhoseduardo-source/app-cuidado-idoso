@@ -1,6 +1,7 @@
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, db
+import datetime
 
 # --- CONFIGURAÇÃO DO FIREBASE ---
 if not firebase_admin._apps:
@@ -27,6 +28,8 @@ if not firebase_admin._apps:
 # --- ESTADO DA SESSÃO ---
 if 'page' not in st.session_state:
     st.session_state.page = "login"
+if 'user_email' not in st.session_state:
+    st.session_state.user_email = ""
 
 def mudar_pagina(nome):
     st.session_state.page = nome
@@ -38,73 +41,88 @@ if st.session_state.page == "login":
     email = st.text_input("E-mail")
     senha = st.text_input("Senha", type="password")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("OK", use_container_width=True):
-            # Lógica simples de Login (Busca no Firebase no futuro)
-            if email == "admin@teste.com" and senha == "123":
-                mudar_pagina("dashboard")
-            else:
-                st.error("Usuário não autorizado ou senha incorreta.")
-    with col2:
-        if st.button("CANCELAR", use_container_width=True):
-            st.info("Operação cancelada.")
+    if st.button("OK", use_container_width=True):
+        if email == "admin@teste.com" and senha == "123":
+            st.session_state.user_email = email
+            mudar_pagina("dashboard")
+        else:
+            st.error("Usuário não autorizado ou senha incorreta.")
 
     st.divider()
-    if st.button("Cadastrar Novo Usuário"):
-        mudar_pagina("cadastro")
-    st.button("Esqueci a Senha")
+    if st.button("Cadastrar Novo Usuário"): mudar_pagina("cadastro")
 
-# --- TELA DE CADASTRO (Ajustada) ---
+# --- TELA DE CADASTRO ---
 elif st.session_state.page == "cadastro":
     st.title("📝 Cadastro de Usuário")
     nome = st.text_input("Nome Completo")
     email_cad = st.text_input("E-mail")
-    tel = st.text_input("Telefone (com DDD)")
+    tel = st.text_input("Telefone")
     senha_cad = st.text_input("Senha", type="password")
-    conf_senha = st.text_input("Confirmar Senha", type="password")
 
     if st.button("Confirmar Cadastro"):
-        if senha_cad != conf_senha:
-            st.error("As senhas não coincidem!")
-        elif not nome or not email_cad:
-            st.warning("Preencha os campos obrigatórios.")
-        else:
-            # Salva no Firebase
-            try:
-                ref = db.reference('usuarios_pendentes')
-                ref.push({
-                    'nome': nome,
-                    'email': email_cad,
-                    'telefone': tel,
-                    'status': 'pendente'
-                })
-                st.success("Cadastro enviado! Aguarde aprovação do Administrador.")
-                if st.button("Voltar ao Login"): mudar_pagina("login")
-            except Exception as e:
-                st.error(f"Erro ao salvar: {e}")
+        db.reference('usuarios_pendentes').push({
+            'nome': nome, 'email': email_cad, 'telefone': tel, 'status': 'pendente'
+        })
+        st.success("Cadastro enviado! Aguarde aprovação.")
+        st.button("Voltar ao Login", on_click=lambda: mudar_pagina("login"))
     
-    if st.button("Voltar"):
-        mudar_pagina("login")
+    if st.button("Voltar"): mudar_pagina("login")
 
-# --- 2ª TELA: DASHBOARD (SELEÇÃO) ---
+# --- 2ª TELA: DASHBOARD ---
 elif st.session_state.page == "dashboard":
     st.title("Página Inicial")
-    st.subheader("Selecione um módulo:")
     
-    col_a, col_b = st.columns(2)
-    with col_a:
+    # PAINEL DO ADMINISTRADOR (Visível apenas para você)
+    if st.session_state.user_email == "admin@teste.com":
+        with st.expander("🔔 GESTÃO DE ACESSOS (ADMIN)"):
+            pendentes = db.reference('usuarios_pendentes').get()
+            if pendentes:
+                for key, val in pendentes.items():
+                    st.write(f"**{val['nome']}** ({val['email']})")
+                    if st.button(f"Aprovar {val['nome']}", key=key):
+                        db.reference('usuarios_aprovados').child(key).set(val)
+                        db.reference('usuarios_pendentes').child(key).delete()
+                        st.success("Usuário aprovado!")
+                        st.rerun()
+            else:
+                st.write("Nenhum pedido de cadastro pendente.")
+
+    col1, col2 = st.columns(2)
+    with col1:
         if st.button("💊 MEDICAMENTOS", use_container_width=True): mudar_pagina("meds")
         if st.button("📅 CONSULTAS", use_container_width=True): mudar_pagina("consultas")
-    with col_b:
+    with col2:
         if st.button("🧪 EXAMES", use_container_width=True): mudar_pagina("exames")
         if st.button("📊 RELATÓRIOS", use_container_width=True): mudar_pagina("relatorios")
     
     st.divider()
     if st.button("Sair"): mudar_pagina("login")
 
-# --- MÓDULOS (Placeholder para testes) ---
-elif st.session_state.page in ["meds", "consultas", "exames", "relatorios"]:
-    st.title(f"Módulo {st.session_state.page.upper()}")
-    st.info("Em breve: Formulários completos de cadastro e listagem.")
+# --- 3ª TELA: MEDICAMENTOS ---
+elif st.session_state.page == "meds":
+    st.title("💊 Controle de Medicamentos")
+    
+    with st.form("cad_med"):
+        nome_m = st.text_input("Nome do Medicamento")
+        dosagem = st.text_input("Dosagem (ex: 50mg)")
+        turnos = ["MANHÃ", "MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "TARDE", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "NOITE"]
+        turno = st.selectbox("Turno / Forma de Uso", turnos)
+        obs = st.text_area("Observações")
+        if st.form_submit_button("CADASTRAR"):
+            db.reference('medicamentos').push({
+                'nome': nome_m, 'dosagem': dosagem, 'turno': turno, 'obs': obs, 'data': str(datetime.date.today())
+            })
+            st.success("Medicamento salvo!")
+
+    st.divider()
+    st.subheader("Lista de Remédios")
+    lista_meds = db.reference('medicamentos').get()
+    if lista_meds:
+        for k, v in lista_meds.items():
+            col_med, col_del = st.columns([4, 1])
+            col_med.write(f"**{v['nome']}** ({v['dosagem']}) - {v['turno']}")
+            if col_del.button("🗑️", key=k):
+                db.reference('medicamentos').child(k).delete()
+                st.rerun()
+    
     if st.button("VOLTAR"): mudar_pagina("dashboard")
