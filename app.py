@@ -30,7 +30,8 @@ st.markdown("""
     <style>
     .block-container { padding-top: 1rem !important; }
     .compact-row { font-size: 11px !important; line-height: 1.1 !important; margin: 0px !important; color: #333; border-bottom: 0.5px solid #eee; padding: 2px 0px; }
-    .stButton > button { padding: 0px 4px !important; font-size: 11px !important; height: 22px !important; min-height: 22px !important; background: transparent !important; border: none !important; }
+    /* Ajuste para ícones menores e na mesma linha */
+    .stButton > button { padding: 0px 1px !important; font-size: 10px !important; height: 18px !important; min-height: 18px !important; background: transparent !important; border: none !important; }
     .main-btn > button { background-color: #f0f2f6 !important; border: 1px solid #ddd !important; height: 35px !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -45,7 +46,8 @@ def mudar_pagina(n):
     st.rerun()
 
 LISTA_ESP = ["Alergista", "Anestesiologia", "Angiologia", "Cardiologia", "Cirurgião", "Clínico Geral", "Coloproctologia", "Dermatologia", "Endocrinologia", "Gastroenterologia", "Geriatria", "Ginecologia e obstetrícia", "Hematologia e hemoterapia", "Infectologia", "Mastologia", "Nefrologia", "Neurocirurgia", "Neurologia", "Nutrologia", "Oftalmologia", "Ortopedia e traumatologia", "Otorrinolaringologia", "Pneumologia", "Psiquiatria", "Reumatologia", "Urologia"]
-TURNOS = ["MANHÃ", "MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "TARDE", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "NOITE"]
+# CORREÇÃO PONTO 2: Lista completa de turnos
+TURNOS = ["MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "MANHÃ", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "TARDE", "NOITE"]
 
 # --- 1ª TELA: LOGIN ---
 if st.session_state.page == "login":
@@ -89,16 +91,26 @@ elif st.session_state.page == "consultas":
         st.caption("CADASTRADOS")
         data = db.reference('consultas').get()
         if data:
-            items = sorted(data.items(), key=lambda x: x[1].get('timestamp', 0), reverse=True)
+            # CORREÇÃO PONTO 3: Ordenação Cronológica Decrescente Real
+            items = sorted(data.items(), key=lambda x: str(x[1].get('data', '')), reverse=True)
             for k, v in items:
                 c_i, c_t = st.columns([0.35, 0.65])
                 with c_i:
                     i1, i2, i3 = st.columns(3)
-                    if i1.button("🗑️", key=f"d{k}"): st.session_state.confirm_del = k; st.rerun()
-                    i2.button("✏️", key=f"e{k}"); i3.button("🔍", key=f"v{k}")
+                    # CORREÇÃO PONTO 1: Botões funcionais vinculados ao confirm_del
+                    if i1.button("🗑️", key=f"dc{k}"): st.session_state.confirm_del = k; st.rerun()
+                    i2.button("✏️", key=f"ec{k}")
+                    i3.button("🔍", key=f"vc{k}")
+                
                 if st.session_state.confirm_del == k:
-                    if st.button("SIM", key=f"sy{k}"): db.reference('consultas').child(k).delete(); st.session_state.confirm_del = None; st.rerun()
-                    st.button("NÃO", key=f"sn{k}")
+                    st.warning("Excluir?")
+                    cy, cn = st.columns(2)
+                    if cy.button("SIM", key=f"cyc{k}"):
+                        db.reference('consultas').child(k).delete()
+                        st.session_state.confirm_del = None; st.rerun()
+                    if cn.button("NÃO", key=f"cnc{k}"):
+                        st.session_state.confirm_del = None; st.rerun()
+
                 dt = v['data'] if '-' not in v['data'] else datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y')
                 c_t.markdown(f"<p class='compact-row'><b>{dt}</b> | {v['especialidade'][:10]}.. | Dr. {v['medico'][:8]}</p>", unsafe_allow_html=True)
 
@@ -123,14 +135,25 @@ elif st.session_state.page == "meds":
         st.caption("CADASTRADOS")
         meds = db.reference('medicamentos').get()
         if meds:
-            sorted_m = sorted(meds.items(), key=lambda x: TURNOS.index(x[1].get('turno', 'NOITE')))
+            # CORREÇÃO PONTO 2: Ordenação por todos os turnos
+            sorted_m = sorted(meds.items(), key=lambda x: TURNOS.index(x[1].get('turno', 'NOITE')) if x[1].get('turno') in TURNOS else 99)
             for k, v in sorted_m:
                 c_i, c_t = st.columns([0.35, 0.65])
                 with c_i:
                     m1, m2, m3 = st.columns(3)
                     if m1.button("🗑️", key=f"dm{k}"): st.session_state.confirm_del = k; st.rerun()
                     m2.button("✏️", key=f"em{k}"); m3.button("🔍", key=f"vm{k}")
-                c_t.markdown(f"<p class='compact-row'><b>{v['turno'][:5]}.</b> | {v['nome']} ({v['mg']})</p>", unsafe_allow_html=True)
+
+                if st.session_state.confirm_del == k:
+                    st.warning("Excluir?")
+                    my, mn = st.columns(2)
+                    if my.button("SIM", key=f"sym{k}"):
+                        db.reference('medicamentos').child(k).delete()
+                        st.session_state.confirm_del = None; st.rerun()
+                    if mn.button("NÃO", key=f"snm{k}"):
+                        st.session_state.confirm_del = None; st.rerun()
+
+                c_t.markdown(f"<p class='compact-row'><b>{v['turno'][:12]}..</b> | {v['nome']} ({v['mg']})</p>", unsafe_allow_html=True)
 
     with col_cad_m:
         with st.form("f_med", clear_on_submit=True):
@@ -147,7 +170,7 @@ elif st.session_state.page == "meds":
                 db.reference('medicamentos').push({'nome': nome_med, 'mg': mg_med, 'medico': med_m, 'especialidade': esp_m, 'turno': turno_m, 'data_cadastro': str(dt_cad), 'timestamp': datetime.datetime.now().timestamp()})
                 st.success("Salvo!"); st.rerun()
 
-# --- MÓDULO EXAMES (NOVO) ---
+# --- MÓDULO EXAMES ---
 elif st.session_state.page == "exames":
     st.title("🧪 Exames")
     col_lista_e, col_cad_e = st.columns([1, 1.3])
@@ -156,13 +179,23 @@ elif st.session_state.page == "exames":
         st.caption("CADASTRADOS")
         exames = db.reference('exames').get()
         if exames:
-            items_e = sorted(exames.items(), key=lambda x: x[1].get('timestamp', 0), reverse=True)
+            items_e = sorted(exames.items(), key=lambda x: str(x[1].get('data', '')), reverse=True)
             for k, v in items_e:
                 ci, ct = st.columns([0.35, 0.65])
                 with ci:
                     e1, e2, e3 = st.columns(3)
                     if e1.button("🗑️", key=f"de{k}"): st.session_state.confirm_del = k; st.rerun()
                     e2.button("✏️", key=f"ee{k}"); e3.button("🔍", key=f"ve{k}")
+                
+                if st.session_state.confirm_del == k:
+                    st.warning("Excluir?")
+                    ey, en = st.columns(2)
+                    if ey.button("SIM", key=f"sye{k}"):
+                        db.reference('exames').child(k).delete()
+                        st.session_state.confirm_del = None; st.rerun()
+                    if en.button("NÃO", key=f"sne{k}"):
+                        st.session_state.confirm_del = None; st.rerun()
+
                 dt_e = v['data'] if '-' not in v['data'] else datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y')
                 ct.markdown(f"<p class='compact-row'><b>{dt_e}</b> | {v['nome'][:12]}.. | Dr. {v['medico'][:8]}</p>", unsafe_allow_html=True)
 
@@ -175,8 +208,13 @@ elif st.session_state.page == "exames":
             data_ex = st.date_input("Data da Realização", format="DD/MM/YYYY")
             local_ex = st.text_input("Laboratório / Clínica")
             preparo = st.checkbox("Necessário Preparo (Jejum, etc.)?")
+            # CORREÇÃO PONTO 4: Campo condicional de preparo
+            desc_prep = ""
+            if preparo:
+                desc_prep = st.text_area("Descreva o preparo:")
+            
             if sub_e:
-                db.reference('exames').push({'nome': n_exame, 'medico': med_sol, 'especialidade': esp_sol, 'data': str(data_ex), 'local': local_ex, 'timestamp': datetime.datetime.now().timestamp()})
+                db.reference('exames').push({'nome': n_exame, 'medico': med_sol, 'especialidade': esp_sol, 'data': str(data_ex), 'local': local_ex, 'preparo': desc_prep, 'timestamp': datetime.datetime.now().timestamp()})
                 st.success("Exame salvo!"); st.rerun()
 
 elif st.session_state.page in ["cadastro", "relatorios"]:
