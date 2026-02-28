@@ -102,6 +102,7 @@ elif st.session_state.page == "consultas":
                     if i2.button("✏️", key=f"e{k}"): st.session_state.edit_item_data = (k, v); st.rerun()
                     if i3.button("🔍", key=f"v{k}"): st.session_state.view_item_id = k if st.session_state.view_item_id != k else None; st.rerun()
                 
+                # FORMATO DATA: DD/MM/AAAA
                 dt = v['data'] if '-' not in v['data'] else datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y')
                 c_t.markdown(f"<p class='compact-row'><b>{dt}</b> | {v['especialidade'][:10]}.. | Dr. {v['medico'][:8]}</p>", unsafe_allow_html=True)
                 if st.session_state.view_item_id == k: st.info(f"Local: {v.get('local', 'N/I')} | Hora: {v.get('hora', 'N/I')}")
@@ -116,7 +117,7 @@ elif st.session_state.page == "consultas":
             btn_txt = "SALVAR ALTERAÇÕES ✏️" if edit_mode else "CADASTRAR ➕"
             sub = st.form_submit_button(btn_txt, use_container_width=True)
             esp = st.selectbox("Especialidade", LISTA_ESP, index=LISTA_ESP.index(v_edit['especialidade']) if edit_mode else 0)
-            dat = st.date_input("Data", value=datetime.datetime.strptime(v_edit['data'], '%Y-%m-%d') if edit_mode else datetime.date.today())
+            dat = st.date_input("Data", value=datetime.datetime.strptime(v_edit['data'], '%Y-%m-%d') if edit_mode else datetime.date.today(), format="DD/MM/YYYY")
             hor = st.text_input("Hora", value=v_edit.get('hora', ''))
             med = st.text_input("Médico", value=v_edit.get('medico', ''))
             loc = st.text_input("Local", value=v_edit.get('local', ''))
@@ -157,7 +158,7 @@ elif st.session_state.page == "meds":
             nome_med = st.text_input("Nome", value=v_m.get('nome', ''))
             mg_med = st.text_input("mg", value=v_m.get('mg', ''))
             c1, c2 = st.columns(2)
-            dt_cad = c1.date_input("Data do Cadastro", value=datetime.datetime.strptime(v_m['data_cadastro'], '%Y-%m-%d') if edit_mode_m else datetime.date.today())
+            dt_cad = c1.date_input("Data do Cadastro", value=datetime.datetime.strptime(v_m['data_cadastro'], '%Y-%m-%d') if edit_mode_m else datetime.date.today(), format="DD/MM/YYYY")
             c2.checkbox("Data de Hoje", value=True)
             med_m = st.text_input("Médico", value=v_m.get('medico', ''))
             esp_m = st.selectbox("Especialidade", LISTA_ESP, index=LISTA_ESP.index(v_m['especialidade']) if edit_mode_m else 0)
@@ -184,6 +185,8 @@ elif st.session_state.page == "exames":
                     if e1.button("🗑️", key=f"de{k}"): st.session_state.confirm_del = k; st.rerun()
                     if e2.button("✏️", key=f"ee{k}"): st.session_state.edit_item_data = (k, v); st.rerun()
                     if e3.button("🔍", key=f"ve{k}"): st.session_state.view_item_id = k if st.session_state.view_item_id != k else None; st.rerun()
+                
+                # FORMATO DATA: DD/MM/AAAA
                 dt_e = v['data'] if '-' not in v['data'] else datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y')
                 ct.markdown(f"<p class='compact-row'><b>{dt_e}</b> | {v['nome'][:12]}.. | Dr. {v['medico'][:8]}</p>", unsafe_allow_html=True)
                 if st.session_state.view_item_id == k: st.info(f"Local: {v.get('local', 'N/I')} | Preparo: {v.get('preparo', 'Nenhum')}")
@@ -199,12 +202,14 @@ elif st.session_state.page == "exames":
             n_ex = st.text_input("Nome do Exame", value=v_e.get('nome', ''))
             m_sol = st.text_input("Médico Solicitante", value=v_e.get('medico', ''))
             esp_sol = st.selectbox("Especialidade", LISTA_ESP, index=LISTA_ESP.index(v_e['especialidade']) if edit_e else 0)
-            data_ex = st.date_input("Data da Realização", value=datetime.datetime.strptime(v_e['data'], '%Y-%m-%d') if edit_e else datetime.date.today())
+            dat_ex = st.date_input("Data da Realização", value=datetime.datetime.strptime(v_e['data'], '%Y-%m-%d') if edit_e else datetime.date.today(), format="DD/MM/YYYY")
             local_ex = st.text_input("Laboratório / Clínica", value=v_e.get('local', ''))
-            prep_check = st.checkbox("Necessário Preparo (Jejum, etc.)?", value=bool(v_e.get('preparo')))
-            desc_prep = st.text_area("Descreva o preparo:", value=v_e.get('preparo', '')) if prep_check else ""
+            
+            # ALTERAÇÃO: Caixa de texto fixa para Informações de Preparo
+            desc_prep = st.text_area("Informações de Preparo", value=v_e.get('preparo', ''))
+            
             if sub_e:
-                p_e = {'nome': n_ex, 'medico': m_sol, 'especialidade': esp_sol, 'data': str(data_ex), 'local': local_ex, 'preparo': desc_prep, 'timestamp': datetime.datetime.now().timestamp()}
+                p_e = {'nome': n_ex, 'medico': m_sol, 'especialidade': esp_sol, 'data': str(dat_ex), 'local': local_ex, 'preparo': desc_prep, 'timestamp': datetime.datetime.now().timestamp()}
                 if edit_e: db.reference('exames').child(st.session_state.edit_item_data[0]).update(p_e); st.session_state.edit_item_data = None
                 else: db.reference('exames').push(p_e)
                 st.rerun()
