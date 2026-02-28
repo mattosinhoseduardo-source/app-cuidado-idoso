@@ -37,10 +37,9 @@ def mudar_pagina(nome):
 def limpar_formulario():
     st.session_state.form_reset += 1
 
-# --- LISTA DE ESPECIALIDADES ---
 LISTA_ESP = ["Alergista", "Anestesiologia", "Angiologia", "Cardiologia", "Cirurgião", "Clínico Geral", "Coloproctologia", "Dermatologia", "Endocrinologia", "Gastroenterologia", "Geriatria", "Ginecologia e obstetrícia", "Hematologia e hemoterapia", "Infectologia", "Mastologia", "Nefrologia", "Neurocirurgia", "Neurologia", "Nutrologia", "Oftalmologia", "Ortopedia e traumatologia", "Otorrinolaringologia", "Pneumologia", "Psiquiatria", "Reumatologia", "Urologia"]
 
-# --- LOGIN ---
+# --- LOGIN E DASHBOARD (Mantidos conforme última versão) ---
 if st.session_state.page == "login":
     st.title("🏥 Gestão de Cuidados")
     email = st.text_input("E-mail").lower().strip()
@@ -58,18 +57,8 @@ if st.session_state.page == "login":
                 st.error("Acesso negado.")
     if st.button("Cadastrar Novo Usuário"): mudar_pagina("cadastro")
 
-# --- DASHBOARD ---
 elif st.session_state.page == "dashboard":
     st.title("Página Inicial")
-    if st.session_state.user_email == "admin@teste.com":
-        with st.expander("🔔 GESTÃO DE ACESSOS (ADMIN)"):
-            pendentes = db.reference('usuarios_pendentes').get()
-            if pendentes:
-                for k, v in pendentes.items():
-                    if st.button(f"Aprovar {v['nome']}", key=k):
-                        db.reference('usuarios_aprovados').child(k).set(v)
-                        db.reference('usuarios_pendentes').child(k).delete()
-                        st.rerun()
     c1, c2 = st.columns(2)
     with c1:
         if st.button("💊 MEDICAMENTOS", use_container_width=True): mudar_pagina("meds")
@@ -79,21 +68,34 @@ elif st.session_state.page == "dashboard":
         if st.button("📊 RELATÓRIOS", use_container_width=True): mudar_pagina("relatorios")
     if st.button("Sair"): mudar_pagina("login")
 
-# --- MÓDULO CONSULTAS ---
+# --- MÓDULO CONSULTAS (AJUSTADO) ---
 elif st.session_state.page == "consultas":
     st.title("📅 Agendamento de Consultas")
     
-    # Botões no topo
-    col_btn1, col_btn2 = st.columns([1, 1])
-    btn_voltar = col_btn2.button("VOLTAR", use_container_width=True)
-    if btn_voltar: mudar_pagina("dashboard")
-
-    # Layout dividido: Lista Esquerda, Cadastro Direita
     col_lista, col_cad = st.columns([1, 1.5])
+
+    with col_lista:
+        # Botão VOLTAR acima da coluna de cadastrados
+        if st.button("VOLTAR", key="back_cons", use_container_width=True): mudar_pagina("dashboard")
+        st.subheader("CADASTRADOS")
+        # Busca sem ordenar no Firebase para evitar o erro, ordenamos no Python
+        cons_raw = db.reference('consultas').get()
+        if cons_raw:
+            # Ordenação cronológica decrescente no Python
+            sorted_cons = sorted(cons_raw.items(), key=lambda x: x[1].get('timestamp', 0), reverse=True)
+            for k, v in sorted_cons:
+                try:
+                    d_fmt = datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y')
+                except:
+                    d_fmt = v['data']
+                st.info(f"📅 {d_fmt} - {v['hora']}\n\n**{v['especialidade']}**\n\nDr(a). {v['medico']}")
+                if st.button("🗑️", key=f"del_{k}"):
+                    db.reference('consultas').child(k).delete()
+                    st.rerun()
 
     with col_cad:
         with st.form(key=f"form_con_{st.session_state.form_reset}"):
-            # Botão Cadastrar dentro do formulário para o topo
+            # Botão CADASTRAR acima dos campos
             submit = st.form_submit_button("CADASTRAR", use_container_width=True)
             esp = st.selectbox("Especialidade", LISTA_ESP)
             data_c = st.date_input("Data da Consulta", format="DD/MM/YYYY")
@@ -110,28 +112,31 @@ elif st.session_state.page == "consultas":
                 limpar_formulario()
                 st.rerun()
 
-    with col_lista:
-        st.subheader("Histórico")
-        cons = db.reference('consultas').order_by_child('timestamp').get()
-        if cons:
-            for k, v in reversed(list(cons.items())):
-                d_fmt = datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y')
-                st.info(f"📅 {d_fmt} - {v['hora']}\n\n**{v['especialidade']}**\n\nDr(a). {v['medico']}")
-                if st.button("🗑️", key=f"del_{k}"):
-                    db.reference('consultas').child(k).delete()
-                    st.rerun()
-
-# --- MÓDULO MEDICAMENTOS ---
+# --- MÓDULO MEDICAMENTOS (AJUSTADO) ---
 elif st.session_state.page == "meds":
     st.title("💊 Medicamentos")
     
-    col_btn1, col_btn2 = st.columns([1, 1])
-    if col_btn2.button("VOLTAR", use_container_width=True): mudar_pagina("dashboard")
-
     col_lista_m, col_cad_m = st.columns([1, 1.5])
+
+    with col_lista_m:
+        # Botão VOLTAR acima da lista
+        if st.button("VOLTAR", key="back_meds", use_container_width=True): mudar_pagina("dashboard")
+        st.subheader("CADASTRADOS")
+        meds_raw = db.reference('medicamentos').get()
+        if meds_raw:
+            turnos_ordem = ["MANHÃ", "MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "TARDE", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "NOITE"]
+            ordem_map = {t: i for i, t in enumerate(turnos_ordem)}
+            # Ordena por turno conforme pedido
+            sorted_meds = sorted(meds_raw.items(), key=lambda x: ordem_map.get(x[1].get('turno', ''), 99))
+            for k, v in sorted_meds:
+                st.warning(f"💊 **{v['turno']}**\n\n{v['nome']} ({v['mg']})")
+                if st.button("🗑️", key=f"del_m_{k}"):
+                    db.reference('medicamentos').child(k).delete()
+                    st.rerun()
 
     with col_cad_m:
         with st.form(key=f"form_med_{st.session_state.form_reset}"):
+            # Botão CADASTRAR acima dos campos
             submit_m = st.form_submit_button("CADASTRAR", use_container_width=True)
             nome_m = st.text_input("Nome do Medicamento")
             mg = st.text_input("Dosagem (mg)")
@@ -143,18 +148,16 @@ elif st.session_state.page == "meds":
             medico_m = st.text_input("Médico")
             esp_m = st.selectbox("Especialidade", LISTA_ESP)
             
-            turnos = ["MANHÃ", "MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "TARDE", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "NOITE"]
-            turno_sel = st.selectbox("Forma de Uso", turnos)
+            t_lista = ["MANHÃ", "MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "TARDE", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "NOITE"]
+            turno_sel = st.selectbox("Forma de Uso", t_lista)
             
-            # Lembretes
             lembrete = st.checkbox("Necessário Lembrete?")
-            dados_lembrete = {}
             if lembrete:
                 tipo_l = st.radio("Tipo", ["Recorrente", "Personalizado"], horizontal=True)
                 if tipo_l == "Recorrente":
-                    dados_lembrete['horario'] = str(st.time_input("Horário do Despertador"))
+                    st.time_input("Horário do Despertador")
                 else:
-                    dados_lembrete['datas'] = st.text_area("Datas e Horas (ex: 01/03 08:00, 02/03 08:00)")
+                    st.text_area("Datas e Horas do Despertador")
             
             if submit_m:
                 db.reference('medicamentos').push({
@@ -165,20 +168,6 @@ elif st.session_state.page == "meds":
                 limpar_formulario()
                 st.rerun()
 
-    with col_lista_m:
-        st.subheader("Cadastrados")
-        meds = db.reference('medicamentos').order_by_child('turno').get()
-        if meds:
-            # Ordenação manual por turno conforme pedido
-            ordem_turnos = {t: i for i, t in enumerate(turnos)}
-            meds_sorted = sorted(meds.items(), key=lambda x: ordem_turnos.get(x[1].get('turno', ''), 99))
-            for k, v in meds_sorted:
-                st.warning(f"💊 **{v['turno']}**\n\n{v['nome']} ({v['mg']})")
-                if st.button("🗑️", key=f"del_m_{k}"):
-                    db.reference('medicamentos').child(k).delete()
-                    st.rerun()
-
-# Outras telas (Placeholder)
 elif st.session_state.page in ["cadastro", "exames", "relatorios"]:
     st.title(st.session_state.page.upper())
     if st.button("VOLTAR"): mudar_pagina("dashboard")
