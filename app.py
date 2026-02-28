@@ -1,10 +1,9 @@
 import streamlit as st
 import firebase_admin
-from firebase_admin import credentials, db, auth
+from firebase_admin import credentials, db
 
-# 1. Configuração de Segurança e Firebase
+# --- CONFIGURAÇÃO DO FIREBASE ---
 if not firebase_admin._apps:
-    # Tenta ler do Cofre de Segredos do Streamlit
     try:
         cred_dict = {
             "type": st.secrets["firebase"]["type"],
@@ -23,11 +22,9 @@ if not firebase_admin._apps:
             'databaseURL': f'https://{st.secrets["firebase"]["project_id"]}-default-rtdb.firebaseio.com/'
         })
     except Exception as e:
-        st.error(f"Erro ao conectar ao Firebase: {e}")
+        st.error(f"Erro de conexão: {e}")
 
-# --- CONFIGURAÇÃO DA INTERFACE ---
-st.set_page_config(page_title="Cuidado Idoso", layout="centered")
-
+# --- ESTADO DA SESSÃO ---
 if 'page' not in st.session_state:
     st.session_state.page = "login"
 
@@ -44,20 +41,57 @@ if st.session_state.page == "login":
     col1, col2 = st.columns(2)
     with col1:
         if st.button("OK", use_container_width=True):
-            # Login Simples (Pode ser expandido com Firebase Auth)
+            # Lógica simples de Login (Busca no Firebase no futuro)
             if email == "admin@teste.com" and senha == "123":
                 mudar_pagina("dashboard")
             else:
-                st.error("Credenciais inválidas.")
+                st.error("Usuário não autorizado ou senha incorreta.")
     with col2:
-        st.button("CANCELAR", use_container_width=True)
-    
-    st.divider()
-    if st.button("Cadastrar Novo Usuário"): mudar_pagina("cadastro")
+        if st.button("CANCELAR", use_container_width=True):
+            st.info("Operação cancelada.")
 
-# --- 2ª TELA: SELEÇÃO ---
+    st.divider()
+    if st.button("Cadastrar Novo Usuário"):
+        mudar_pagina("cadastro")
+    st.button("Esqueci a Senha")
+
+# --- TELA DE CADASTRO (Ajustada) ---
+elif st.session_state.page == "cadastro":
+    st.title("📝 Cadastro de Usuário")
+    nome = st.text_input("Nome Completo")
+    email_cad = st.text_input("E-mail")
+    tel = st.text_input("Telefone (com DDD)")
+    senha_cad = st.text_input("Senha", type="password")
+    conf_senha = st.text_input("Confirmar Senha", type="password")
+
+    if st.button("Confirmar Cadastro"):
+        if senha_cad != conf_senha:
+            st.error("As senhas não coincidem!")
+        elif not nome or not email_cad:
+            st.warning("Preencha os campos obrigatórios.")
+        else:
+            # Salva no Firebase
+            try:
+                ref = db.reference('usuarios_pendentes')
+                ref.push({
+                    'nome': nome,
+                    'email': email_cad,
+                    'telefone': tel,
+                    'status': 'pendente'
+                })
+                st.success("Cadastro enviado! Aguarde aprovação do Administrador.")
+                if st.button("Voltar ao Login"): mudar_pagina("login")
+            except Exception as e:
+                st.error(f"Erro ao salvar: {e}")
+    
+    if st.button("Voltar"):
+        mudar_pagina("login")
+
+# --- 2ª TELA: DASHBOARD (SELEÇÃO) ---
 elif st.session_state.page == "dashboard":
     st.title("Página Inicial")
+    st.subheader("Selecione um módulo:")
+    
     col_a, col_b = st.columns(2)
     with col_a:
         if st.button("💊 MEDICAMENTOS", use_container_width=True): mudar_pagina("meds")
@@ -65,33 +99,12 @@ elif st.session_state.page == "dashboard":
     with col_b:
         if st.button("🧪 EXAMES", use_container_width=True): mudar_pagina("exames")
         if st.button("📊 RELATÓRIOS", use_container_width=True): mudar_pagina("relatorios")
+    
     st.divider()
     if st.button("Sair"): mudar_pagina("login")
 
-# --- 3ª TELA: MEDICAMENTOS ---
-elif st.session_state.page == "meds":
-    st.title("💊 Medicamentos")
-    with st.expander("Cadastrar Novo Medicamento", expanded=True):
-        nome_med = st.text_input("Nome do Medicamento")
-        mg = st.text_input("Miligramas")
-        turnos = ["MANHÃ", "MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "TARDE", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "NOITE"]
-        forma = st.selectbox("Forma de Uso", turnos)
-        
-        if st.button("Confirmar Cadastro"):
-            st.success(f"{nome_med} cadastrado com sucesso!")
-            
-    if st.button("VOLTAR"): mudar_pagina("dashboard")
-
-# --- 3.2 TELA: CONSULTAS ---
-elif st.session_state.page == "consultas":
-    st.title("📅 Consultas")
-    especialidades = ["Alergista", "Anestesiologia", "Angiologia", "Cardiologia", "Cirurgião", "Clínico Geral", "Coloproctologia", "Dermatologia", "Endocrinologia", "Gastroenterologia", "Geriatria", "Ginecologia e obstetrícia", "Hematologia e hemoterapia", "Infectologia", "Mastologia", "Nefrologia", "Neurocirurgia", "Neurologia", "Nutrologia", "Oftalmologia", "Ortopedia e traumatologia", "Otorrinolaringologia", "Pneumologia", "Psiquiatria", "Reumatologia", "Urologia"]
-    
-    esp = st.selectbox("Especialidade", especialidades)
-    medico = st.text_input("Nome do Médico")
-    data_c = st.date_input("Data da Consulta")
-    
-    if st.button("Salvar Consulta"):
-        st.success("Consulta agendada!")
-        
+# --- MÓDULOS (Placeholder para testes) ---
+elif st.session_state.page in ["meds", "consultas", "exames", "relatorios"]:
+    st.title(f"Módulo {st.session_state.page.upper()}")
+    st.info("Em breve: Formulários completos de cadastro e listagem.")
     if st.button("VOLTAR"): mudar_pagina("dashboard")
