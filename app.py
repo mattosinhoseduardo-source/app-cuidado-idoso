@@ -30,7 +30,6 @@ st.markdown("""
     <style>
     .block-container { padding-top: 1rem !important; }
     .compact-row { font-size: 11px !important; line-height: 1.1 !important; margin: 0px !important; color: #333; border-bottom: 0.5px solid #eee; padding: 2px 0px; }
-    /* Ajuste para ícones menores e na mesma linha */
     .stButton > button { padding: 0px 1px !important; font-size: 10px !important; height: 18px !important; min-height: 18px !important; background: transparent !important; border: none !important; }
     .main-btn > button { background-color: #f0f2f6 !important; border: 1px solid #ddd !important; height: 35px !important; }
     </style>
@@ -39,14 +38,16 @@ st.markdown("""
 # --- NAVEGAÇÃO E ESTADOS ---
 if 'page' not in st.session_state: st.session_state.page = "login"
 if 'confirm_del' not in st.session_state: st.session_state.confirm_del = None
-if 'user_email' not in st.session_state: st.session_state.user_email = ""
+if 'edit_item_data' not in st.session_state: st.session_state.edit_item_data = None
+if 'view_item_id' not in st.session_state: st.session_state.view_item_id = None
 
 def mudar_pagina(n): 
     st.session_state.page = n
+    st.session_state.edit_item_data = None
+    st.session_state.view_item_id = None
     st.rerun()
 
 LISTA_ESP = ["Alergista", "Anestesiologia", "Angiologia", "Cardiologia", "Cirurgião", "Clínico Geral", "Coloproctologia", "Dermatologia", "Endocrinologia", "Gastroenterologia", "Geriatria", "Ginecologia e obstetrícia", "Hematologia e hemoterapia", "Infectologia", "Mastologia", "Nefrologia", "Neurocirurgia", "Neurologia", "Nutrologia", "Oftalmologia", "Ortopedia e traumatologia", "Otorrinolaringologia", "Pneumologia", "Psiquiatria", "Reumatologia", "Urologia"]
-# CORREÇÃO PONTO 2: Lista completa de turnos
 TURNOS = ["MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "MANHÃ", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "TARDE", "NOITE"]
 
 # --- 1ª TELA: LOGIN ---
@@ -58,14 +59,8 @@ if st.session_state.page == "login":
     with c_ok:
         if st.button("OK", use_container_width=True):
             if email == "admin@teste.com" and senha == "123":
-                st.session_state.user_email = email
                 mudar_pagina("dashboard")
-            else:
-                users = db.reference('usuarios_aprovados').get()
-                if users and any(v['email'].lower() == email and v['senha'] == senha for v in users.values()):
-                    st.session_state.user_email = email
-                    mudar_pagina("dashboard")
-                else: st.error("Acesso Negado.")
+            else: st.error("Acesso Negado.")
     with c_can: st.button("CANCELAR", use_container_width=True)
     st.divider()
     if st.button("Cadastrar Novo Usuário", use_container_width=True): mudar_pagina("cadastro")
@@ -91,131 +86,160 @@ elif st.session_state.page == "consultas":
         st.caption("CADASTRADOS")
         data = db.reference('consultas').get()
         if data:
-            # CORREÇÃO PONTO 3: Ordenação Cronológica Decrescente Real
             items = sorted(data.items(), key=lambda x: str(x[1].get('data', '')), reverse=True)
             for k, v in items:
                 c_i, c_t = st.columns([0.35, 0.65])
                 with c_i:
                     i1, i2, i3 = st.columns(3)
-                    # CORREÇÃO PONTO 1: Botões funcionais vinculados ao confirm_del
                     if i1.button("🗑️", key=f"dc{k}"): st.session_state.confirm_del = k; st.rerun()
-                    i2.button("✏️", key=f"ec{k}")
-                    i3.button("🔍", key=f"vc{k}")
+                    if i2.button("✏️", key=f"ec{k}"): 
+                        st.session_state.edit_item_data = (k, v)
+                        st.rerun()
+                    if i3.button("🔍", key=f"vc{k}"): 
+                        st.session_state.view_item_id = k if st.session_state.view_item_id != k else None
+                        st.rerun()
                 
-                if st.session_state.confirm_del == k:
-                    st.warning("Excluir?")
-                    cy, cn = st.columns(2)
-                    if cy.button("SIM", key=f"cyc{k}"):
-                        db.reference('consultas').child(k).delete()
-                        st.session_state.confirm_del = None; st.rerun()
-                    if cn.button("NÃO", key=f"cnc{k}"):
-                        st.session_state.confirm_del = None; st.rerun()
-
                 dt = v['data'] if '-' not in v['data'] else datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y')
                 c_t.markdown(f"<p class='compact-row'><b>{dt}</b> | {v['especialidade'][:10]}.. | Dr. {v['medico'][:8]}</p>", unsafe_allow_html=True)
 
+                if st.session_state.view_item_id == k:
+                    st.info(f"📍 {v.get('local', 'Não informado')}\n\n⏰ {v.get('hora', 'Não informada')}")
+
+                if st.session_state.confirm_del == k:
+                    st.warning("Excluir?"); cy, cn = st.columns(2)
+                    if cy.button("SIM", key=f"cyc{k}"): 
+                        db.reference('consultas').child(k).delete()
+                        st.session_state.confirm_del = None; st.rerun()
+                    if cn.button("NÃO", key=f"cnc{k}"): st.session_state.confirm_del = None; st.rerun()
+
     with col_cad:
-        with st.form("f_con", clear_on_submit=True):
-            sub = st.form_submit_button("CADASTRAR ➕", use_container_width=True)
-            esp = st.selectbox("Especialidade", LISTA_ESP)
-            dat = st.date_input("Data", format="DD/MM/YYYY")
-            hor = st.text_input("Hora")
-            med = st.text_input("Médico")
-            loc = st.text_input("Local")
+        # Lógica de Edição vs Cadastro
+        edit_mode = st.session_state.edit_item_data is not None
+        titulo_btn = "SALVAR ALTERAÇÕES ✏️" if edit_mode else "CADASTRAR ➕"
+        item_v = st.session_state.edit_item_data[1] if edit_mode else {}
+
+        with st.form("f_con", clear_on_submit=not edit_mode):
+            sub = st.form_submit_button(titulo_btn, use_container_width=True)
+            esp = st.selectbox("Especialidade", LISTA_ESP, index=LISTA_ESP.index(item_v['especialidade']) if edit_mode else 0)
+            dat = st.date_input("Data", value=datetime.datetime.strptime(item_v['data'], '%Y-%m-%d') if edit_mode else datetime.date.today())
+            hor = st.text_input("Hora", value=item_v.get('hora', ''))
+            med = st.text_input("Médico", value=item_v.get('medico', ''))
+            loc = st.text_input("Local", value=item_v.get('local', ''))
             if sub:
-                db.reference('consultas').push({'especialidade': esp, 'data': str(dat), 'hora': hor, 'medico': med, 'local': loc, 'timestamp': datetime.datetime.now().timestamp()})
-                st.success("Salvo!"); st.rerun()
+                payload = {'especialidade': esp, 'data': str(dat), 'hora': hor, 'medico': med, 'local': loc, 'timestamp': datetime.datetime.now().timestamp()}
+                if edit_mode:
+                    db.reference('consultas').child(st.session_state.edit_item_data[0]).update(payload)
+                    st.session_state.edit_item_data = None
+                else:
+                    db.reference('consultas').push(payload)
+                st.rerun()
 
 # --- MÓDULO MEDICAMENTOS ---
 elif st.session_state.page == "meds":
     st.title("💊 Medicamentos")
-    col_lista_m, col_cad_m = st.columns([1, 1.3])
-    with col_lista_m:
+    col_l, col_r = st.columns([1, 1.3])
+    with col_l:
         if st.button("⬅ VOLTAR", use_container_width=True): mudar_pagina("dashboard")
         st.caption("CADASTRADOS")
         meds = db.reference('medicamentos').get()
         if meds:
-            # CORREÇÃO PONTO 2: Ordenação por todos os turnos
             sorted_m = sorted(meds.items(), key=lambda x: TURNOS.index(x[1].get('turno', 'NOITE')) if x[1].get('turno') in TURNOS else 99)
             for k, v in sorted_m:
                 c_i, c_t = st.columns([0.35, 0.65])
                 with c_i:
                     m1, m2, m3 = st.columns(3)
                     if m1.button("🗑️", key=f"dm{k}"): st.session_state.confirm_del = k; st.rerun()
-                    m2.button("✏️", key=f"em{k}"); m3.button("🔍", key=f"vm{k}")
+                    if m2.button("✏️", key=f"em{k}"): st.session_state.edit_item_data = (k, v); st.rerun()
+                    if m3.button("🔍", key=f"vm{k}"):
+                        st.session_state.view_item_id = k if st.session_state.view_item_id != k else None
+                        st.rerun()
+                c_t.markdown(f"<p class='compact-row'><b>{v['turno'][:12]}..</b> | {v['nome']} ({v['mg']})</p>", unsafe_allow_html=True)
+                
+                if st.session_state.view_item_id == k:
+                    st.info(f"👨‍⚕️ Médico: {v.get('medico', 'Não informado')}\n\n📅 Cadastrado em: {v.get('data_cadastro', 'N/A')}")
 
                 if st.session_state.confirm_del == k:
-                    st.warning("Excluir?")
-                    my, mn = st.columns(2)
-                    if my.button("SIM", key=f"sym{k}"):
+                    st.warning("Excluir?"); my, mn = st.columns(2)
+                    if my.button("SIM", key=f"sym{k}"): 
                         db.reference('medicamentos').child(k).delete()
                         st.session_state.confirm_del = None; st.rerun()
-                    if mn.button("NÃO", key=f"snm{k}"):
-                        st.session_state.confirm_del = None; st.rerun()
+                    if mn.button("NÃO", key=f"snm{k}"): st.session_state.confirm_del = None; st.rerun()
 
-                c_t.markdown(f"<p class='compact-row'><b>{v['turno'][:12]}..</b> | {v['nome']} ({v['mg']})</p>", unsafe_allow_html=True)
-
-    with col_cad_m:
-        with st.form("f_med", clear_on_submit=True):
-            sub_m = st.form_submit_button("CADASTRAR ➕", use_container_width=True)
-            nome_med = st.text_input("Nome")
-            mg_med = st.text_input("mg")
-            c1, c2 = st.columns(2)
-            dt_cad = c1.date_input("Data do Cadastro", format="DD/MM/YYYY")
-            c2.checkbox("Data de Hoje", value=True)
-            med_m = st.text_input("Médico")
-            esp_m = st.selectbox("Especialidade", LISTA_ESP)
-            turno_m = st.selectbox("Turno", TURNOS)
+    with col_r:
+        edit_mode_m = st.session_state.edit_item_data is not None
+        item_m = st.session_state.edit_item_data[1] if edit_mode_m else {}
+        with st.form("f_med", clear_on_submit=not edit_mode_m):
+            sub_m = st.form_submit_button("SALVAR ALTERAÇÕES ✏️" if edit_mode_m else "CADASTRAR ➕", use_container_width=True)
+            n_m = st.text_input("Nome", value=item_m.get('nome', ''))
+            m_m = st.text_input("mg", value=item_m.get('mg', ''))
+            med_m = st.text_input("Médico", value=item_m.get('medico', ''))
+            t_m = st.selectbox("Forma de Uso", TURNOS, index=TURNOS.index(item_m['turno']) if edit_mode_m and item_m['turno'] in TURNOS else 0)
             if sub_m:
-                db.reference('medicamentos').push({'nome': nome_med, 'mg': mg_med, 'medico': med_m, 'especialidade': esp_m, 'turno': turno_m, 'data_cadastro': str(dt_cad), 'timestamp': datetime.datetime.now().timestamp()})
-                st.success("Salvo!"); st.rerun()
+                payload_m = {'nome': n_m, 'mg': m_m, 'medico': med_m, 'turno': t_m, 'timestamp': datetime.datetime.now().timestamp()}
+                if edit_mode_m:
+                    db.reference('medicamentos').child(st.session_state.edit_item_data[0]).update(payload_m)
+                    st.session_state.edit_item_data = None
+                else:
+                    db.reference('medicamentos').push(payload_m)
+                st.rerun()
 
 # --- MÓDULO EXAMES ---
 elif st.session_state.page == "exames":
     st.title("🧪 Exames")
-    col_lista_e, col_cad_e = st.columns([1, 1.3])
-    with col_lista_e:
+    col_le, col_ce = st.columns([1, 1.3])
+    with col_le:
         if st.button("⬅ VOLTAR", use_container_width=True): mudar_pagina("dashboard")
         st.caption("CADASTRADOS")
-        exames = db.reference('exames').get()
-        if exames:
-            items_e = sorted(exames.items(), key=lambda x: str(x[1].get('data', '')), reverse=True)
-            for k, v in items_e:
+        exs = db.reference('exames').get()
+        if exs:
+            for k, v in sorted(exs.items(), key=lambda x: x[1].get('data', ''), reverse=True):
                 ci, ct = st.columns([0.35, 0.65])
                 with ci:
                     e1, e2, e3 = st.columns(3)
                     if e1.button("🗑️", key=f"de{k}"): st.session_state.confirm_del = k; st.rerun()
-                    e2.button("✏️", key=f"ee{k}"); e3.button("🔍", key=f"ve{k}")
+                    if e2.button("✏️", key=f"ee{k}"): st.session_state.edit_item_data = (k, v); st.rerun()
+                    if e3.button("🔍", key=f"ve{k}"): 
+                        st.session_state.view_item_id = k if st.session_state.view_item_id != k else None
+                        st.rerun()
                 
-                if st.session_state.confirm_del == k:
-                    st.warning("Excluir?")
-                    ey, en = st.columns(2)
-                    if ey.button("SIM", key=f"sye{k}"):
-                        db.reference('exames').child(k).delete()
-                        st.session_state.confirm_del = None; st.rerun()
-                    if en.button("NÃO", key=f"sne{k}"):
-                        st.session_state.confirm_del = None; st.rerun()
-
                 dt_e = v['data'] if '-' not in v['data'] else datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y')
                 ct.markdown(f"<p class='compact-row'><b>{dt_e}</b> | {v['nome'][:12]}.. | Dr. {v['medico'][:8]}</p>", unsafe_allow_html=True)
+                
+                if st.session_state.view_item_id == k:
+                    st.info(f"🏢 Local: {v.get('local', 'N/I')}\n\n📝 Preparo: {v.get('preparo', 'Nenhum')}")
 
-    with col_cad_e:
-        with st.form("f_exame", clear_on_submit=True):
-            sub_e = st.form_submit_button("CADASTRAR ➕", use_container_width=True)
-            n_exame = st.text_input("Nome do Exame")
-            med_sol = st.text_input("Médico Solicitante")
-            esp_sol = st.selectbox("Especialidade", LISTA_ESP)
-            data_ex = st.date_input("Data da Realização", format="DD/MM/YYYY")
-            local_ex = st.text_input("Laboratório / Clínica")
-            preparo = st.checkbox("Necessário Preparo (Jejum, etc.)?")
-            # CORREÇÃO PONTO 4: Campo condicional de preparo
-            desc_prep = ""
-            if preparo:
-                desc_prep = st.text_area("Descreva o preparo:")
+                if st.session_state.confirm_del == k:
+                    st.warning("Excluir?"); ey, en = st.columns(2)
+                    if ey.button("SIM", key=f"sye{k}"): 
+                        db.reference('exames').child(k).delete()
+                        st.session_state.confirm_del = None; st.rerun()
+                    if en.button("NÃO", key=f"sne{k}"): st.session_state.confirm_del = None; st.rerun()
+
+    with col_ce:
+        edit_mode_e = st.session_state.edit_item_data is not None
+        item_e = st.session_state.edit_item_data[1] if edit_mode_e else {}
+        
+        with st.form("f_ex", clear_on_submit=not edit_mode_e):
+            st.form_submit_button("SALVAR ALTERAÇÕES ✏️" if edit_mode_e else "CADASTRAR ➕", use_container_width=True)
+            n_ex = st.text_input("Exame", value=item_e.get('nome', ''))
+            m_ex = st.text_input("Médico", value=item_e.get('medico', ''))
+            d_ex = st.date_input("Data", value=datetime.datetime.strptime(item_e['data'], '%Y-%m-%d') if edit_mode_e else datetime.date.today())
+            l_ex = st.text_input("Local", value=item_e.get('local', ''))
             
-            if sub_e:
-                db.reference('exames').push({'nome': n_exame, 'medico': med_sol, 'especialidade': esp_sol, 'data': str(data_ex), 'local': local_ex, 'preparo': desc_prep, 'timestamp': datetime.datetime.now().timestamp()})
-                st.success("Exame salvo!"); st.rerun()
+            # CORREÇÃO PONTO PREPARO: Campo dinâmico
+            prep_check = st.checkbox("Necessário Preparo (Jejum, etc.)?", value=bool(item_e.get('preparo')))
+            desc_prep = ""
+            if prep_check:
+                desc_prep = st.text_area("Descreva o preparo:", value=item_e.get('preparo', ''))
+            
+            if st.form_submit_button("SALVAR DADOS"):
+                payload_e = {'nome': n_ex, 'medico': m_ex, 'data': str(d_ex), 'local': l_ex, 'preparo': desc_prep, 'timestamp': datetime.datetime.now().timestamp()}
+                if edit_mode_e:
+                    db.reference('exames').child(st.session_state.edit_item_data[0]).update(payload_e)
+                    st.session_state.edit_item_data = None
+                else:
+                    db.reference('exames').push(payload_e)
+                st.rerun()
 
 elif st.session_state.page in ["cadastro", "relatorios"]:
     st.title(st.session_state.page.upper())
