@@ -2,7 +2,7 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, db
 import datetime
-from fpdf import FPDF 
+from fpdf import FPDF
 
 # --- CONFIGURAÇÃO DO FIREBASE ---
 if not firebase_admin._apps:
@@ -203,20 +203,19 @@ elif st.session_state.page == "exames":
                 else: db.reference('exames').push(p_e)
                 mudar_pagina("exames")
 
-# --- MÓDULO RELATÓRIOS (CORRIGIDO) ---
+# --- MÓDULO RELATÓRIOS (INCLUSO COM INDENTAÇÃO CORRETA) ---
 elif st.session_state.page == "relatorios":
     st.title("📊 Relatórios")
+    col_rel_l, col_rel_r = st.columns([1, 1])
     
-    col_r1, col_r2 = st.columns(2)
-    d_inicio = col_r1.date_input("Período Inicial", format="DD/MM/YYYY", value=datetime.date.today() - datetime.timedelta(days=30))
-    d_final = col_r2.date_input("Período Final", format="DD/MM/YYYY")
-    
-    opcao = st.selectbox("Tipo de Relatório", ["CONSOLIDADO", "MEDICAMENTOS", "CONSULTAS", "EXAMES"])
-    
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
+    with col_rel_l:
+        d_ini = st.date_input("Período Inicial", format="DD/MM/YYYY", value=datetime.date.today() - datetime.timedelta(days=30))
+        d_fim = st.date_input("Período Final", format="DD/MM/YYYY")
+        opcao = st.selectbox("Tipo de Relatório", ["CONSOLIDADO", "MEDICAMENTOS", "CONSULTAS", "EXAMES"])
+
+    with col_rel_r:
+        st.write("##") # Espaçador
         gerar = st.button("GERAR RELATÓRIO PDF", use_container_width=True)
-    with col_b2:
         if st.button("VOLTAR", use_container_width=True): mudar_pagina("dashboard")
 
     if gerar:
@@ -226,32 +225,29 @@ elif st.session_state.page == "relatorios":
             pdf.set_font("Arial", "B", 16)
             pdf.cell(190, 10, "Relatorio de Saude", 0, 1, "C")
             pdf.set_font("Arial", "", 10)
-            pdf.cell(190, 10, f"Periodo: {d_inicio.strftime('%d/%m/%Y')} a {d_final.strftime('%d/%m/%Y')}", 0, 1, "C")
-            pdf.ln(5)
-
-            def add_to_pdf(titulo, path, campos):
-                data_ref = db.reference(path).get()
-                if data_ref:
-                    pdf.set_font("Arial", "B", 12)
-                    pdf.cell(190, 10, titulo, 1, 1, "L")
-                    pdf.set_font("Arial", "", 9)
-                    for k, v in data_ref.items():
-                        v_date_str = v.get('data') or v.get('data_cadastro')
-                        if v_date_str:
-                            v_date = datetime.datetime.strptime(v_date_str, '%Y-%m-%d').date()
-                            if d_inicio <= v_date <= d_final:
-                                info = " | ".join([f"{c}: {v.get(c.lower(), 'N/A')}" for c in campos])
-                                pdf.multi_cell(190, 7, f"[{v_date.strftime('%d/%m/%Y')}] {info}", 0, "L")
+            pdf.cell(190, 10, f"Periodo: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}", 0, 1, "C")
+            
+            def add_sec(title, path, fields):
+                res = db.reference(path).get()
+                if res:
                     pdf.ln(5)
+                    pdf.set_font("Arial", "B", 12)
+                    pdf.cell(190, 10, title, 1, 1, "L")
+                    pdf.set_font("Arial", "", 9)
+                    for k, v in res.items():
+                        v_d = v.get('data') or v.get('data_cadastro')
+                        if v_d and d_ini <= datetime.datetime.strptime(v_d, '%Y-%m-%d').date() <= d_fim:
+                            txt = " | ".join([f"{f}: {v.get(f.lower(), 'N/A')}" for f in fields])
+                            pdf.multi_cell(190, 7, f"[{v_d}] {txt}", 0, "L")
 
-            if opcao in ["CONSOLIDADO", "MEDICAMENTOS"]: add_to_pdf("MEDICAMENTOS", 'medicamentos', ["Nome", "mg", "Turno", "Medico"])
-            if opcao in ["CONSOLIDADO", "CONSULTAS"]: add_to_pdf("CONSULTAS", 'consultas', ["Especialidade", "Medico", "Local", "Hora"])
-            if opcao in ["CONSOLIDADO", "EXAMES"]: add_to_pdf("EXAMES", 'exames', ["Nome", "Medico", "Local", "Preparo"])
+            if opcao in ["CONSOLIDADO", "MEDICAMENTOS"]: add_sec("MEDICAMENTOS", 'medicamentos', ["Nome", "mg", "Turno", "Medico"])
+            if opcao in ["CONSOLIDADO", "CONSULTAS"]: add_sec("CONSULTAS", 'consultas', ["Especialidade", "Medico", "Local"])
+            if opcao in ["CONSOLIDADO", "EXAMES"]: add_sec("EXAMES", 'exames', ["Nome", "Medico", "Local", "Preparo"])
 
-            pdf_bytes = pdf.output(dest='S').encode('latin-1')
-            st.download_button("Baixar PDF", data=pdf_bytes, file_name="relatorio.pdf", mime="application/pdf")
+            pdf_out = pdf.output(dest='S').encode('latin-1')
+            st.download_button("Baixar PDF", data=pdf_out, file_name="relatorio.pdf", mime="application/pdf")
         except Exception as e:
-            st.error(f"Erro no PDF: {e}")
+            st.error(f"Erro: {e}")
 
 elif st.session_state.page == "cadastro":
     st.title("NOVO CADASTRO")
