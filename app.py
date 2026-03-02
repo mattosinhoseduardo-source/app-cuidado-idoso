@@ -2,7 +2,7 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, db
 import datetime
-from fpdf import FPDF # Necessário adicionar 'fpdf' no requirements.txt
+from fpdf import FPDF 
 
 # --- CONFIGURAÇÃO DO FIREBASE ---
 if not firebase_admin._apps:
@@ -36,24 +36,23 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÕES AUXILIARES ---
-def mudar_pagina(n): 
-    st.session_state.page = n
-    st.session_state.edit_item_data = None
-    st.session_state.view_item_id = None
-    st.rerun()
-
-# --- ESTADOS DE SESSÃO ---
+# --- NAVEGAÇÃO E ESTADOS ---
 if 'page' not in st.session_state: st.session_state.page = "login"
 if 'confirm_del' not in st.session_state: st.session_state.confirm_del = None
 if 'edit_item_data' not in st.session_state: st.session_state.edit_item_data = None
 if 'view_item_id' not in st.session_state: st.session_state.view_item_id = None
 if 'user_email' not in st.session_state: st.session_state.user_email = ""
 
+def mudar_pagina(n): 
+    st.session_state.page = n
+    st.session_state.edit_item_data = None
+    st.session_state.view_item_id = None
+    st.rerun()
+
 LISTA_ESP = ["Alergista", "Anestesiologia", "Angiologia", "Cardiologia", "Cirurgião", "Clínico Geral", "Coloproctologia", "Dermatologia", "Endocrinologia", "Gastroenterologia", "Geriatria", "Ginecologia e obstetrícia", "Hematologia e hemoterapia", "Infectologia", "Mastologia", "Nefrologia", "Neurocirurgia", "Neurologia", "Nutrologia", "Oftalmologia", "Ortopedia e traumatologia", "Otorrinolaringologia", "Pneumologia", "Psiquiatria", "Reumatologia", "Urologia"]
 TURNOS = ["MANHÃ", "MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "TARDE", "TARDE ANTES DO ALMOÇO", "TARDE DEPOIS DO ALMOÇO", "NOITE"]
 
-# --- LOGIN ---
+# --- TELAS PADRÃO (LOGIN E DASHBOARD) ---
 if st.session_state.page == "login":
     st.title("🏥 Gestão de Cuidados")
     email = st.text_input("E-mail").lower().strip()
@@ -75,7 +74,6 @@ if st.session_state.page == "login":
     if st.button("Cadastrar Novo Usuário", use_container_width=True): mudar_pagina("cadastro")
     st.button("Esqueci a Senha", use_container_width=True)
 
-# --- DASHBOARD ---
 elif st.session_state.page == "dashboard":
     st.title("Painel Principal")
     c1, c2 = st.columns(2)
@@ -86,7 +84,7 @@ elif st.session_state.page == "dashboard":
     st.divider()
     if st.button("Sair"): mudar_pagina("login")
 
-# --- MÓDULO CONSULTAS ---
+# --- MÓDULOS DE CADASTRO (CONSULTAS, MEDS, EXAMES) ---
 elif st.session_state.page == "consultas":
     st.title("📅 Consultas")
     col_lista, col_cad = st.columns([1, 1.3])
@@ -126,7 +124,6 @@ elif st.session_state.page == "consultas":
                 else: db.reference('consultas').push(payload)
                 mudar_pagina("consultas")
 
-# --- MÓDULO MEDICAMENTOS ---
 elif st.session_state.page == "meds":
     st.title("💊 Medicamentos")
     col_lista_m, col_cad_m = st.columns([1, 1.3])
@@ -165,7 +162,6 @@ elif st.session_state.page == "meds":
                 else: db.reference('medicamentos').push(payload_m)
                 mudar_pagina("meds")
 
-# --- MÓDULO EXAMES ---
 elif st.session_state.page == "exames":
     st.title("🧪 Exames")
     col_lista_e, col_cad_e = st.columns([1, 1.3])
@@ -204,57 +200,59 @@ elif st.session_state.page == "exames":
                 else: db.reference('exames').push(p_e)
                 mudar_pagina("exames")
 
-# --- MÓDULO RELATÓRIOS ---
+# --- MÓDULO RELATÓRIOS (PDF INTEGRADO) ---
 elif st.session_state.page == "relatorios":
     st.title("📊 Relatórios")
     
+    # Período e Opção de Filtro
     col_r1, col_r2 = st.columns(2)
     d_inicio = col_r1.date_input("Período Inicial", format="DD/MM/YYYY", value=datetime.date.today() - datetime.timedelta(days=30))
     d_final = col_r2.date_input("Período Final", format="DD/MM/YYYY")
     
     opcao = st.selectbox("Tipo de Relatório", ["CONSOLIDADO", "MEDICAMENTOS", "CONSULTAS", "EXAMES"])
     
+    # Botões Lado a Lado
     col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        gerar = st.button("GERAR RELATÓRIO PDF", use_container_width=True)
-    with col_b2:
-        if st.button("VOLTAR", use_container_width=True): mudar_pagina("dashboard")
+    gerar = col_b1.button("GERAR RELATÓRIO PDF", use_container_width=True)
+    if col_b2.button("VOLTAR", use_container_width=True): mudar_pagina("dashboard")
 
     if gerar:
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(190, 10, "Relatorio de Cuidados", 0, 1, "C")
-        pdf.set_font("Arial", "", 10)
-        pdf.cell(190, 10, f"Periodo: {d_inicio.strftime('%d/%m/%Y')} a {d_final.strftime('%d/%m/%Y')}", 0, 1, "C")
-        pdf.ln(10)
+        try:
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 16)
+            pdf.cell(190, 10, "Relatorio de Cuidados e Saude", 0, 1, "C")
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(190, 10, f"Periodo: {d_inicio.strftime('%d/%m/%Y')} a {d_final.strftime('%d/%m/%Y')}", 0, 1, "C")
+            pdf.ln(5)
 
-        def add_section(title, ref_path, fields):
-            data = db.reference(ref_path).get()
-            if data:
-                pdf.set_font("Arial", "B", 12)
-                pdf.cell(190, 10, title, 1, 1, "L")
-                pdf.set_font("Arial", "", 9)
-                for k, v in data.items():
-                    # Tenta pegar a data de campos diferentes dependendo do módulo
-                    v_date_str = v.get('data') or v.get('data_cadastro')
-                    if v_date_str:
-                        v_date = datetime.datetime.strptime(v_date_str, '%Y-%m-%d').date()
-                        if d_inicio <= v_date <= d_final:
-                            info = " | ".join([f"{f}: {v.get(f.lower(),'N/I')}" for f in fields])
-                            pdf.multi_cell(190, 7, f"[{v_date.strftime('%d/%m/%Y')}] {info}", 0, "L")
-                            pdf.ln(2)
-                pdf.ln(5)
+            def incluir_no_pdf(titulo, path, campos):
+                data_ref = db.reference(path).get()
+                if data_ref:
+                    pdf.set_font("Arial", "B", 12)
+                    pdf.cell(190, 10, titulo, 1, 1, "L")
+                    pdf.set_font("Arial", "", 9)
+                    for k, v in data_ref.items():
+                        v_date_str = v.get('data') or v.get('data_cadastro')
+                        if v_date_str:
+                            v_date = datetime.datetime.strptime(v_date_str, '%Y-%m-%d').date()
+                            if d_inicio <= v_date <= d_final:
+                                info = " | ".join([f"{c}: {v.get(c.lower(), 'N/A')}" for c in campos])
+                                pdf.multi_cell(190, 7, f"[{v_date.strftime('%d/%m/%Y')}] {info}", 0, "L")
+                    pdf.ln(5)
 
-        if opcao in ["CONSOLIDADO", "MEDICAMENTOS"]:
-            add_section("MEDICAMENTOS", 'medicamentos', ["Nome", "mg", "Turno", "Medico"])
-        if opcao in ["CONSOLIDADO", "CONSULTAS"]:
-            add_section("CONSULTAS", 'consultas', ["Especialidade", "Medico", "Local", "Hora"])
-        if opcao in ["CONSOLIDADO", "EXAMES"]:
-            add_section("EXAMES", 'exames', ["Nome", "Medico", "Local", "Preparo"])
+            if opcao in ["CONSOLIDADO", "MEDICAMENTOS"]:
+                incluir_no_pdf("MEDICAMENTOS", 'medicamentos', ["Nome", "mg", "Turno", "Medico"])
+            if opcao in ["CONSOLIDADO", "CONSULTAS"]:
+                incluir_no_pdf("CONSULTAS", 'consultas', ["Especialidade", "Medico", "Local", "Hora"])
+            if opcao in ["CONSOLIDADO", "EXAMES"]:
+                incluir_no_pdf("EXAMES", 'exames', ["Nome", "Medico", "Local", "Preparo"])
 
-        pdf_output = pdf.output(dest='S').encode('latin-1')
-        st.download_button("Clique aqui para baixar o PDF", data=pdf_output, file_name="relatorio_saude.pdf", mime="application/pdf")
+            pdf_bytes = pdf.output(dest='S').encode('latin-1')
+            st.download_button("Baixar PDF Gerado", data=pdf_bytes, file_name="relatorio.pdf", mime="application/pdf")
+            st.success("Relatório gerado com sucesso!")
+        except Exception as e:
+            st.error(f"Erro ao gerar PDF: {e}. Verifique se 'fpdf2' está instalado.")
 
 elif st.session_state.page == "cadastro":
     st.title("NOVO CADASTRO")
