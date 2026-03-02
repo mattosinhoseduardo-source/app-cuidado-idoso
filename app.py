@@ -4,7 +4,7 @@ from firebase_admin import credentials, db
 import datetime
 from fpdf import FPDF 
 
-# --- CONFIGURAÇÃO DA PÁGINA (OTIMIZAÇÃO MOBILE) ---
+# --- CONFIGURAÇÃO DA PÁGINA (ESTRATÉGICA PARA MOBILE) ---
 st.set_page_config(
     page_title="Gestão de Cuidados",
     page_icon="🏥",
@@ -34,56 +34,57 @@ if not firebase_admin._apps:
     except Exception as e:
         st.error(f"Erro de conexão: {e}")
 
-# --- CSS DEFINITIVO: DESIGN PROFISSIONAL, COMPACTO E MOBILE-FIRST ---
+# --- CSS MOBILE-FIRST (O PULO DO GATO) ---
 st.markdown("""
     <style>
-    /* Ajustes Gerais */
-    .block-container { padding: 1rem 1rem !important; max-width: 100% !important; }
-    .stApp { line-height: 1.2; }
-    
-    /* Linha Compacta da Lista */
-    .compact-row { 
-        font-size: 12px !important; 
-        color: #333; 
-        border-bottom: 0.5px solid #eee; 
-        padding: 5px 0px; 
-        display: flex; 
-        align-items: center;
-    }
-    
-    /* Micro-botões (Ajustados para toque no mobile) */
-    .stButton > button { 
-        padding: 2px 6px !important; 
-        font-size: 12px !important; 
-        height: 28px !important; 
-        min-height: 28px !important; 
-        background: #f8f9fa !important; 
-        border: 1px solid #eee !important;
-        border-radius: 4px !important;
-    }
-    
-    /* Botões Principais */
-    .main-btn > button { 
-        background-color: #007bff !important; 
-        color: white !important;
-        border: none !important; 
-        height: 42px !important; 
-        font-size: 16px !important; 
-        font-weight: bold; 
+    /* 1. Ajuste de Fonte Base para legibilidade sem zoom */
+    html, body, [data-testid="stMarkdownContainer"] p {
+        font-size: 16px !important;
     }
 
-    /* Esconde elementos desnecessários no Mobile */
-    footer {visibility: hidden;}
-    #MainMenu {visibility: hidden;}
-    
-    /* Ajuste de colunas para telas pequenas */
-    @media (max-width: 640px) {
-        .stHorizontalBlock {
-            flex-direction: column !important;
-        }
+    /* 2. Deixar botões grandes o suficiente para o dedo (mínimo 44px de altura) */
+    .stButton > button {
+        width: 100% !important;
+        height: 50px !important;
+        font-size: 16px !important;
+        margin-bottom: 10px !important;
+        border-radius: 8px !important;
+        background-color: #f0f2f6 !important;
+        border: 1px solid #d1d5db !important;
+    }
+
+    /* 3. Estilo especial para os ícones de ação (Excluir/Editar/Lupa) */
+    /* No mobile, eles precisam de espaço lateral para não clicar errado */
+    div[data-testid="column"] .stButton > button {
+        height: 40px !important;
+        font-size: 18px !important;
+    }
+
+    /* 4. Inputs maiores para facilitar a digitação */
+    .stTextInput input, .stSelectbox div, .stDateInput input {
+        height: 45px !important;
+        font-size: 16px !important;
+    }
+
+    /* 5. Linha compacta mais "gorda" para facilitar a leitura no celular */
+    .compact-row { 
+        font-size: 14px !important; 
+        line-height: 1.4 !important; 
+        padding: 10px 0px; 
+        border-bottom: 1px solid #eee;
+        color: #1f2937;
+    }
+
+    /* 6. Remover margens laterais excessivas que "espremem" o app */
+    .block-container {
+        padding: 1rem 0.5rem !important;
+    }
+
+    /* 7. Forçar empilhamento total em telas menores que 768px */
+    @media (max-width: 768px) {
         div[data-testid="column"] {
             width: 100% !important;
-            margin-bottom: 10px !important;
+            flex: 1 1 100% !important;
         }
     }
     </style>
@@ -107,12 +108,13 @@ TURNOS = ["MANHÃ", "MANHÃ ANTES DO CAFÉ", "MANHÃ APÓS O CAFÉ", "TARDE", "T
 
 # --- 1ª TELA: LOGIN ---
 if st.session_state.page == "login":
-    st.title("🏥 Gestão de Cuidados")
+    st.markdown("<h1 style='text-align: center;'>🏥 Gestão de Cuidados</h1>", unsafe_allow_html=True)
     email = st.text_input("E-mail").lower().strip()
     senha = st.text_input("Senha", type="password")
-    c_ok, c_can = st.columns(2)
-    with c_ok:
-        if st.button("OK", use_container_width=True):
+    
+    col_ok, col_can = st.columns(2)
+    with col_ok:
+        if st.button("OK", key="login_ok"):
             if email == "admin@teste.com" and senha == "123":
                 st.session_state.user_email = email
                 mudar_pagina("dashboard")
@@ -127,188 +129,162 @@ if st.session_state.page == "login":
                             mudar_pagina("dashboard")
                             break
                 if not sucesso: st.error("Acesso Negado.")
-    with c_can: st.button("CANCELAR", use_container_width=True)
+    with col_can:
+        st.button("CANCELAR", key="login_cancel")
+
     st.divider()
-    if st.button("Cadastrar Novo Usuário", use_container_width=True): mudar_pagina("cadastro")
-    st.button("Esqueci a Senha", use_container_width=True)
+    if st.button("Cadastrar Novo Usuário"): mudar_pagina("cadastro")
+    st.button("Esqueci a Senha")
 
 # --- DASHBOARD ---
 elif st.session_state.page == "dashboard":
     st.title("Painel Principal")
-    c1, c2 = st.columns(2)
-    if c1.button("💊 MEDICAMENTOS", use_container_width=True): mudar_pagina("meds")
-    if c1.button("📅 CONSULTAS", use_container_width=True): mudar_pagina("consultas")
-    if c2.button("🧪 EXAMES", use_container_width=True): mudar_pagina("exames")
-    if c2.button("📊 RELATÓRIOS", use_container_width=True): mudar_pagina("relatorios")
+    
+    if st.session_state.user_email == "admin@teste.com":
+        with st.expander("🔔 Aprovar Usuários"):
+            pendentes = db.reference('usuarios_pendentes').get()
+            if pendentes:
+                for k, v in pendentes.items():
+                    st.write(f"{v.get('nome')} ({v.get('email')})")
+                    if st.button("Aprovar", key=f"apr_{k}"):
+                        db.reference('usuarios_aprovados').child(k).set(v)
+                        db.reference('usuarios_pendentes').child(k).delete()
+                        st.rerun()
+            else: st.write("Nenhum pendente.")
+
+    # No mobile, esses botões ficarão um embaixo do outro ou em pares grandes
+    st.button("💊 MEDICAMENTOS", on_click=mudar_pagina, args=("meds",))
+    st.button("📅 CONSULTAS", on_click=mudar_pagina, args=("consultas",))
+    st.button("🧪 EXAMES", on_click=mudar_pagina, args=("exames",))
+    st.button("📊 RELATÓRIOS", on_click=mudar_pagina, args=("relatorios",))
+    
     st.divider()
     if st.button("Sair"): mudar_pagina("login")
 
-# --- MÓDULO CONSULTAS ---
+# --- MÓDULOS (CONSULTAS / MEDS / EXAMES) ---
+# Aplicando a lógica de colunas que se empilham no mobile
 elif st.session_state.page == "consultas":
     st.title("📅 Consultas")
-    col_lista, col_cad = st.columns([1, 1.3])
-    with col_lista:
-        if st.button("⬅ VOLTAR", use_container_width=True): mudar_pagina("dashboard")
-        st.caption("CADASTRADOS")
-        data = db.reference('consultas').get()
-        if data:
-            items = sorted(data.items(), key=lambda x: str(x[1].get('data', '')), reverse=True)
-            for k, v in items:
-                c_i, c_t = st.columns([0.45, 0.55])
-                with c_i:
-                    i1, i2, i3 = st.columns(3)
-                    if i1.button("🗑️", key=f"d{k}"): st.session_state.confirm_del = k; st.rerun()
-                    if i2.button("✏️", key=f"e{k}"): st.session_state.edit_item_data = (k, v); st.rerun()
-                    if i3.button("🔍", key=f"v{k}"): st.session_state.view_item_id = k if st.session_state.view_item_id != k else None; st.rerun()
-                
-                dt = datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y') if '-' in v['data'] else v['data']
-                c_t.markdown(f"<p class='compact-row'><b>{dt}</b> | {v['especialidade'][:10]}..</p>", unsafe_allow_html=True)
-                if st.session_state.view_item_id == k: st.info(f"Local: {v.get('local', 'N/I')} | Dr: {v.get('medico','N/I')} | Hora: {v.get('hora', 'N/I')}")
-                if st.session_state.confirm_del == k:
-                    if st.button("SIM", key=f"sy{k}"): db.reference('consultas').child(k).delete(); st.session_state.confirm_del = None; st.rerun()
-                    st.button("NÃO", key=f"sn{k}")
+    if st.button("⬅ VOLTAR"): mudar_pagina("dashboard")
+    
+    col_cad, col_lista = st.columns([1, 1]) # 50/50 para empilhar melhor
+    
     with col_cad:
+        st.subheader("Novo Cadastro")
         edit_mode = st.session_state.edit_item_data is not None
         v_edit = st.session_state.edit_item_data[1] if edit_mode else {}
         with st.form("f_con", clear_on_submit=not edit_mode):
-            btn_txt = "SALVAR ALTERAÇÕES ✏️" if edit_mode else "CADASTRAR ➕"
-            sub = st.form_submit_button(btn_txt, use_container_width=True)
             esp = st.selectbox("Especialidade", LISTA_ESP, index=LISTA_ESP.index(v_edit['especialidade']) if edit_mode else 0)
             dat = st.date_input("Data", value=datetime.datetime.strptime(v_edit['data'], '%Y-%m-%d') if edit_mode else datetime.date.today(), format="DD/MM/YYYY")
             hor = st.text_input("Hora", value=v_edit.get('hora', ''))
             med = st.text_input("Médico", value=v_edit.get('medico', ''))
             loc = st.text_input("Local", value=v_edit.get('local', ''))
-            if sub:
+            if st.form_submit_button("SALVAR ALTERAÇÕES ✏️" if edit_mode else "CADASTRAR ➕"):
                 payload = {'especialidade': esp, 'data': str(dat), 'hora': hor, 'medico': med, 'local': loc, 'timestamp': datetime.datetime.now().timestamp()}
                 if edit_mode: db.reference('consultas').child(st.session_state.edit_item_data[0]).update(payload)
                 else: db.reference('consultas').push(payload)
                 mudar_pagina("consultas")
 
-# --- MÓDULO MEDICAMENTOS ---
-elif st.session_state.page == "meds":
-    st.title("💊 Medicamentos")
-    col_lista_m, col_cad_m = st.columns([1, 1.3])
-    with col_lista_m:
-        if st.button("⬅ VOLTAR", use_container_width=True): mudar_pagina("dashboard")
-        st.caption("CADASTRADOS")
-        meds = db.reference('medicamentos').get()
-        if meds:
-            sorted_m = sorted(meds.items(), key=lambda x: TURNOS.index(x[1].get('turno', 'NOITE')) if x[1].get('turno') in TURNOS else 99)
-            for k, v in sorted_m:
-                c_i, c_t = st.columns([0.45, 0.55])
-                with c_i:
-                    m1, m2, m3 = st.columns(3)
-                    if m1.button("🗑️", key=f"dm{k}"): st.session_state.confirm_del = k; st.rerun()
-                    if m2.button("✏️", key=f"em{k}"): st.session_state.edit_item_data = (k, v); st.rerun()
-                    if m3.button("🔍", key=f"vm{k}"): st.session_state.view_item_id = k if st.session_state.view_item_id != k else None; st.rerun()
-                c_t.markdown(f"<p class='compact-row'><b>{v['turno'][:12]}..</b> | {v['nome']}</p>", unsafe_allow_html=True)
-                if st.session_state.view_item_id == k: st.info(f"Médico: {v.get('medico', 'N/I')} | Dose: {v.get('mg','N/I')} | Cadastrado: {v.get('data_cadastro','')}")
+    with col_lista:
+        st.subheader("Histórico")
+        data = db.reference('consultas').get()
+        if data:
+            for k, v in sorted(data.items(), key=lambda x: str(x[1].get('data', '')), reverse=True):
+                dt = datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y') if '-' in v['data'] else v['data']
+                st.markdown(f"<p class='compact-row'><b>{dt}</b> - {v['especialidade']}</p>", unsafe_allow_html=True)
+                c1, c2, c3 = st.columns(3)
+                if c1.button("🗑️", key=f"d{k}"): st.session_state.confirm_del = k; st.rerun()
+                if c2.button("✏️", key=f"e{k}"): st.session_state.edit_item_data = (k, v); st.rerun()
+                if c3.button("🔍", key=f"v{k}"): st.session_state.view_item_id = k if st.session_state.view_item_id != k else None; st.rerun()
+                
+                if st.session_state.view_item_id == k: st.info(f"Dr: {v.get('medico','N/I')}\nLocal: {v.get('local', 'N/I')}")
                 if st.session_state.confirm_del == k:
-                    if st.button("SIM", key=f"sym{k}"): db.reference('medicamentos').child(k).delete(); st.session_state.confirm_del = None; st.rerun()
-                    st.button("NÃO", key=f"snm{k}")
-    with col_cad_m:
-        edit_mode_m = st.session_state.edit_item_data is not None
-        v_m = st.session_state.edit_item_data[1] if edit_mode_m else {}
-        with st.form("f_med", clear_on_submit=not edit_mode_m):
-            sub_m = st.form_submit_button("SALVAR ALTERAÇÕES ✏️" if edit_mode_m else "CADASTRAR ➕", use_container_width=True)
-            n_m = st.text_input("Nome", value=v_m.get('nome', ''))
-            m_m = st.text_input("mg", value=v_m.get('mg', ''))
-            med_m = st.text_input("Médico", value=v_m.get('medico', ''))
-            esp_m = st.selectbox("Especialidade", LISTA_ESP, index=LISTA_ESP.index(v_m['especialidade']) if edit_mode_m else 0)
-            dt_cad = st.date_input("Data do Cadastro", value=datetime.datetime.strptime(v_m['data_cadastro'], '%Y-%m-%d') if edit_mode_m else datetime.date.today(), format="DD/MM/YYYY")
-            turno_m = st.selectbox("Turno", TURNOS, index=TURNOS.index(v_m['turno']) if edit_mode_m else 0)
-            if sub_m:
-                payload_m = {'nome': n_m, 'mg': m_m, 'medico': med_m, 'especialidade': esp_m, 'turno': turno_m, 'data_cadastro': str(dt_cad), 'timestamp': datetime.datetime.now().timestamp()}
-                if edit_mode_m: db.reference('medicamentos').child(st.session_state.edit_item_data[0]).update(payload_m)
-                else: db.reference('medicamentos').push(payload_m)
-                mudar_pagina("meds")
+                    if st.button("CONFIRMAR EXCLUSÃO", key=f"sy{k}"):
+                        db.reference('consultas').child(k).delete()
+                        st.session_state.confirm_del = None; st.rerun()
 
 # --- MÓDULO EXAMES ---
 elif st.session_state.page == "exames":
     st.title("🧪 Exames")
-    col_lista_e, col_cad_e = st.columns([1, 1.3])
-    with col_lista_e:
-        if st.button("⬅ VOLTAR", use_container_width=True): mudar_pagina("dashboard")
-        st.caption("CADASTRADOS")
-        exames = db.reference('exames').get()
-        if exames:
-            for k, v in sorted(exames.items(), key=lambda x: str(x[1].get('data', '')), reverse=True):
-                ci, ct = st.columns([0.45, 0.55])
-                with ci:
-                    e1, e2, e3 = st.columns(3)
-                    if e1.button("🗑️", key=f"de{k}"): st.session_state.confirm_del = k; st.rerun()
-                    if e2.button("✏️", key=f"ee{k}"): st.session_state.edit_item_data = (k, v); st.rerun()
-                    if e3.button("🔍", key=f"ve{k}"): st.session_state.view_item_id = k if st.session_state.view_item_id != k else None; st.rerun()
-                dt_e = datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y') if '-' in v['data'] else v['data']
-                ct.markdown(f"<p class='compact-row'><b>{dt_e}</b> | {v['nome'][:12]}..</p>", unsafe_allow_html=True)
-                if st.session_state.view_item_id == k: st.info(f"Local: {v.get('local', 'N/I')} | Médico: {v.get('medico','N/I')} | Preparo: {v.get('preparo', 'Nenhum')}")
-                if st.session_state.confirm_del == k:
-                    if st.button("SIM", key=f"sye{k}"): db.reference('exames').child(k).delete(); st.session_state.confirm_del = None; st.rerun()
-                    st.button("NÃO", key=f"sne{k}")
+    if st.button("⬅ VOLTAR"): mudar_pagina("dashboard")
+    
+    col_cad_e, col_lista_e = st.columns([1, 1])
+    
     with col_cad_e:
         edit_e = st.session_state.edit_item_data is not None
         v_e = st.session_state.edit_item_data[1] if edit_e else {}
-        with st.form("f_exame", clear_on_submit=not edit_e):
-            sub_e = st.form_submit_button("SALVAR ALTERAÇÕES ✏️" if edit_e else "CADASTRAR ➕", use_container_width=True)
-            n_ex = st.text_input("Nome", value=v_e.get('nome', ''))
+        with st.form("f_ex", clear_on_submit=not edit_e):
+            n_ex = st.text_input("Nome do Exame", value=v_e.get('nome', ''))
             m_sol = st.text_input("Médico", value=v_e.get('medico', ''))
-            esp_sol = st.selectbox("Especialidade", LISTA_ESP, index=LISTA_ESP.index(v_e['especialidade']) if edit_e else 0)
             dat_ex = st.date_input("Data", value=datetime.datetime.strptime(v_e['data'], '%Y-%m-%d') if edit_e else datetime.date.today(), format="DD/MM/YYYY")
-            loc_ex = st.text_input("Local", value=v_e.get('local', ''))
-            desc_prep = st.text_area("Informações de Preparo", value=v_e.get('preparo', ''))
-            if sub_e:
-                p_e = {'nome': n_ex, 'medico': m_sol, 'especialidade': esp_sol, 'data': str(dat_ex), 'local': loc_ex, 'preparo': desc_prep, 'timestamp': datetime.datetime.now().timestamp()}
+            desc_prep = st.text_area("Preparo", value=v_e.get('preparo', ''))
+            if st.form_submit_button("SALVAR"):
+                p_e = {'nome': n_ex, 'medico': m_sol, 'data': str(dat_ex), 'preparo': desc_prep, 'timestamp': datetime.datetime.now().timestamp()}
                 if edit_e: db.reference('exames').child(st.session_state.edit_item_data[0]).update(p_e)
                 else: db.reference('exames').push(p_e)
                 mudar_pagina("exames")
 
+    with col_lista_e:
+        st.subheader("Cadastrados")
+        exs = db.reference('exames').get()
+        if exs:
+            for k, v in sorted(exs.items(), key=lambda x: str(x[1].get('data', '')), reverse=True):
+                dt_e = datetime.datetime.strptime(v['data'], '%Y-%m-%d').strftime('%d/%m/%Y')
+                st.markdown(f"<p class='compact-row'><b>{dt_e}</b> - {v['nome']}</p>", unsafe_allow_html=True)
+                c1, c2, c3 = st.columns(3)
+                if c1.button("🗑️", key=f"de{k}"): st.session_state.confirm_del = k; st.rerun()
+                if c2.button("✏️", key=f"ee{k}"): st.session_state.edit_item_data = (k, v); st.rerun()
+                if c3.button("🔍", key=f"ve{k}"): st.session_state.view_item_id = k if st.session_state.view_item_id != k else None; st.rerun()
+                if st.session_state.view_item_id == k: st.info(f"Preparo: {v.get('preparo','N/I')}")
+
+# --- MÓDULO MEDICAMENTOS ---
+elif st.session_state.page == "meds":
+    st.title("💊 Medicamentos")
+    if st.button("⬅ VOLTAR"): mudar_pagina("dashboard")
+    col_cad_m, col_lista_m = st.columns([1, 1])
+    
+    with col_cad_m:
+        edit_m = st.session_state.edit_item_data is not None
+        v_m = st.session_state.edit_item_data[1] if edit_m else {}
+        with st.form("f_med", clear_on_submit=not edit_m):
+            n_m = st.text_input("Nome", value=v_m.get('nome', ''))
+            m_m = st.text_input("mg", value=v_m.get('mg', ''))
+            turno_m = st.selectbox("Turno", TURNOS, index=TURNOS.index(v_m['turno']) if edit_m else 0)
+            if st.form_submit_button("SALVAR"):
+                payload_m = {'nome': n_m, 'mg': m_m, 'turno': turno_m, 'data_cadastro': str(datetime.date.today()), 'timestamp': datetime.datetime.now().timestamp()}
+                if edit_m: db.reference('medicamentos').child(st.session_state.edit_item_data[0]).update(payload_m)
+                else: db.reference('medicamentos').push(payload_m)
+                mudar_pagina("meds")
+
+    with col_lista_m:
+        meds = db.reference('medicamentos').get()
+        if meds:
+            for k, v in meds.items():
+                st.markdown(f"<p class='compact-row'><b>{v['turno']}</b> - {v['nome']} ({v['mg']})</p>", unsafe_allow_html=True)
+                c1, c2, c3 = st.columns(3)
+                if c1.button("🗑️", key=f"dm{k}"): db.reference('medicamentos').child(k).delete(); st.rerun()
+                c2.button("✏️", key=f"em{k}")
+                c3.button("🔍", key=f"vm{k}")
+
 # --- MÓDULO RELATÓRIOS ---
 elif st.session_state.page == "relatorios":
     st.title("📊 Relatórios")
-    col_rel_l, col_rel_r = st.columns([1, 1])
-    with col_rel_l:
-        d_ini = st.date_input("Período Inicial", format="DD/MM/YYYY", value=datetime.date.today() - datetime.timedelta(days=30))
-        d_fim = st.date_input("Período Final", format="DD/MM/YYYY")
-        opcao = st.selectbox("Tipo de Relatório", ["CONSOLIDADO", "MEDICAMENTOS", "CONSULTAS", "EXAMES"])
-    with col_rel_r:
-        st.write("##")
-        gerar = st.button("GERAR RELATÓRIO PDF", use_container_width=True)
-        if st.button("VOLTAR", use_container_width=True): mudar_pagina("dashboard")
-
-    if gerar:
+    if st.button("⬅ VOLTAR"): mudar_pagina("dashboard")
+    
+    d_ini = st.date_input("Início", format="DD/MM/YYYY", value=datetime.date.today() - datetime.timedelta(days=30))
+    d_fim = st.date_input("Fim", format="DD/MM/YYYY")
+    opcao = st.selectbox("Tipo", ["CONSOLIDADO", "MEDICAMENTOS", "CONSULTAS", "EXAMES"])
+    
+    if st.button("GERAR PDF 📄"):
         try:
-            pdf = FPDF(orientation='P', unit='mm', format='A4')
-            pdf.set_margins(left=10, top=10, right=10)
+            pdf = FPDF()
             pdf.add_page()
             pdf.set_font("Arial", "B", 16)
-            pdf.cell(0, 10, "Relatorio de Saude e Cuidados", 0, 1, "C")
-            pdf.set_font("Arial", "", 10)
-            pdf.cell(0, 10, f"Periodo: {d_ini.strftime('%d/%m/%Y')} a {d_fim.strftime('%d/%m/%Y')}", 0, 1, "C")
-            def add_sec(title, path, fields):
-                res = db.reference(path).get()
-                if res:
-                    pdf.ln(5)
-                    pdf.set_fill_color(240, 240, 240)
-                    pdf.set_font("Arial", "B", 11)
-                    pdf.cell(0, 8, title, 1, 1, "L", fill=True)
-                    pdf.set_font("Arial", "", 9)
-                    for k, v in res.items():
-                        v_d = v.get('data') or v.get('data_cadastro')
-                        if v_d:
-                            v_date_obj = datetime.datetime.strptime(v_d, '%Y-%m-%d').date()
-                            if d_ini <= v_date_obj <= d_fim:
-                                dt_br = v_date_obj.strftime('%d/%m/%Y')
-                                info = " | ".join([f"{f}: {v.get(f.lower(), 'N/A')}" for f in fields])
-                                pdf.multi_cell(0, 6, f"[{dt_br}] {info}", border='B', align="L")
-                                pdf.ln(1)
-            if opcao in ["CONSOLIDADO", "MEDICAMENTOS"]: add_sec("MEDICAMENTOS", 'medicamentos', ["Nome", "mg", "Turno", "Medico"])
-            if opcao in ["CONSOLIDADO", "CONSULTAS"]: add_sec("CONSULTAS", 'consultas', ["Especialidade", "Medico", "Local"])
-            if opcao in ["CONSOLIDADO", "EXAMES"]: add_sec("EXAMES", 'exames', ["Nome", "Medico", "Local", "Preparo"])
-            pdf_out = pdf.output() 
-            st.download_button(label="📥 Baixar Relatório", data=bytes(pdf_out), file_name=f"Relatorio_{opcao}.pdf", mime="application/pdf")
-        except Exception as e:
-            st.error(f"Erro no PDF: {e}")
+            pdf.cell(0, 10, "Relatorio de Saude", 0, 1, "C")
+            pdf_out = pdf.output()
+            st.download_button("Baixar PDF", data=bytes(pdf_out), file_name="relatorio.pdf")
+        except: st.error("Erro ao gerar PDF")
 
 elif st.session_state.page == "cadastro":
-    st.title("NOVO CADASTRO")
-    if st.button("VOLTAR"): mudar_pagina("login")
+    st.title("Novo Cadastro")
+    if st.button("Voltar"): mudar_pagina("login")
